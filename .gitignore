@@ -1,0 +1,24 @@
+# Gradle et Android
+.gradle/
+build/
+/local.properties
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Clés de signature : ne jamais les versionner
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.b64
+keystore.properties
+
+# Éditeurs et système
+.idea/
+*.iml
+.vscode/
+.kotlin/
+.DS_Store

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Thème de fenêtre minimal ; l'interface elle-même est en Compose. -->
+    <style name="Theme.Sente" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/sente_fond</item>
+    </style>
+</resources>
