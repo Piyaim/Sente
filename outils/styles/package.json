@@ -1,0 +1,12 @@
+{
+  "name": "sente-styles",
+  "private": true,
+  "type": "module",
+  "description": "Génère les styles de carte de Sente à partir de Protomaps",
+  "scripts": {
+    "generer": "node generer.mjs ../../app/src/main/assets"
+  },
+  "dependencies": {
+    "@protomaps/basemaps": "5.7.2"
+  }
+}

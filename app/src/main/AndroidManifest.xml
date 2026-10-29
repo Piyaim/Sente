@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Aucune permission déclarée ici : cette préversion n'accède ni au réseau ni à la position. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Téléchargement des régions depuis GitHub, uniquement sur action de l'utilisateur. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Position : GPS (précise) ; la position approximative est demandée avec, comme l'exige Android. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Ajoutée par MapLibre mais inutile à Sente : retirée. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_WIFI_STATE"
+        tools:node="remove" />
 
     <application
         android:allowBackup="false"
@@ -11,6 +21,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

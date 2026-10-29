@@ -2,7 +2,7 @@
 
 **Sente** est une application de navigation GPS pour Android, libre et respectueuse de la vie privée. Elle vise le meilleur de Google Maps (carte, recherche, fiches de lieux) et de Waze (guidage voiture, signalements, alertes), sans aucune collecte de données et sans aucun service Google.
 
-> **État actuel : préversion « coquille vide » (lot 0 bis).** L'application s'installe et s'ouvre, rien de plus. Ne l'utilisez pas pour naviguer.
+> **État actuel : lot 1 en test.** Carte hors ligne d'une région et position GPS. Pas encore de recherche ni d'itinéraire : ne l'utilisez pas pour naviguer.
 
 ## Principes
 
@@ -42,16 +42,18 @@ Les choix techniques et leurs raisons sont tenus dans [DECISIONS.md](DECISIONS.m
 1. Ouvrez la page [Releases](../../releases) du dépôt et prenez la préversion la plus récente.
 2. Téléchargez le fichier `sente-….apk` sur votre téléphone.
 3. Ouvrez-le et autorisez l'installation depuis votre navigateur ou gestionnaire de fichiers si Android le demande.
-4. Facultatif : comparez l'empreinte SHA-256 affichée dans les notes de version avec le fichier `.sha256` fourni.
+4. Facultatif : dépliez « Vérifier le fichier » dans les notes de la préversion et comparez l'empreinte du certificat avec celle de la clé du projet.
 
 ## Technologies
 
-Kotlin, Jetpack Compose (Material 3). Prévu : MapLibre Native (carte), tuiles PMTiles issues d'OpenStreetMap, Valhalla embarqué (itinéraires), Ferrostar (guidage).
+Kotlin, Jetpack Compose (Material 3), MapLibre Native (carte), tuiles PMTiles issues d'OpenStreetMap. Prévu : Valhalla embarqué (itinéraires), Ferrostar (guidage).
 
 ## Licences et attributions
 
 - Code de l'application : [GNU AGPL v3 ou ultérieure](LICENSE).
-- Données cartographiques (à partir du lot 1) : © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), sous licence ODbL.
+- Données cartographiques : © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), sous licence ODbL ; tuiles et style d'après [Protomaps](https://protomaps.com) (style CC0).
+- Polices Noto Sans : SIL Open Font License. Icônes de carte : dérivées de tangrams/icons (MIT).
+- Cartes téléchargeables : dépôt [Piyaim/Sente-cartes](https://github.com/Piyaim/Sente-cartes).
 
 ## Contribuer
 

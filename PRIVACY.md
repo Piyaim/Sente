@@ -2,11 +2,39 @@
 
 Ce document dit **exactement** ce que Sente envoie, à qui, et pourquoi. Il distingue ce qui existe **aujourd'hui** de ce qui est **prévu**. Il est mis à jour à chaque version qui change un échange réseau ou une permission.
 
-## Version actuelle (préversion 0.0.x, « coquille vide »)
+## Version actuelle (préversions 0.1.x : carte hors ligne)
 
-- **Permissions Android : aucune donnant accès à vos données ou au réseau.** Ni Internet, ni position. La seule entrée possible dans la liste est une permission interne ajoutée par la bibliothèque AndroidX, réservée à l'application elle-même ; les notes de chaque préversion affichent la liste exacte.
-- **Connexions réseau : aucune.**
-- **Données enregistrées : aucune.**
+### Permissions Android
+
+| Permission | Pourquoi | Quand |
+| --- | --- | --- |
+| Internet | Télécharger la liste des régions et une région | Uniquement quand vous appuyez sur « Voir les régions disponibles » puis « Télécharger » |
+| Position précise et approximative | Afficher votre position grâce au GPS | Uniquement quand l'appli est à l'écran ; jamais en arrière-plan |
+| État du réseau | Exigée par la bibliothèque de carte MapLibre pour savoir si le réseau est disponible | Ne transmet rien |
+| Permission interne AndroidX | Réservée à l'appli elle-même | Ne donne accès à rien |
+
+La permission « état du Wi-Fi », ajoutée par MapLibre, est retirée. Les notes de chaque préversion affichent la liste exacte.
+
+### Connexions réseau
+
+Aucune connexion au démarrage ni en arrière-plan. Seulement, à votre demande :
+
+- **Liste des régions** : `catalogue.json` sur `github.com` (dépôt Piyaim/Sente-cartes), redirigé par GitHub vers ses serveurs de fichiers (`*.githubusercontent.com`).
+- **Fichier d'une région** : même origine, téléchargé par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
+- Dans les deux cas, Sente envoie l'en-tête `User-Agent: Sente` à la place de celui d'Android, qui contiendrait le modèle du téléphone. GitHub voit votre adresse IP et l'heure.
+- **Sans aucun réseau** : copiez un fichier `.pmtiles` sur le téléphone et utilisez « Importer un fichier ».
+
+La carte elle-même (MapLibre) ne contacte aucun serveur : style, polices, icônes et carte sont lus sur le téléphone.
+
+### Position
+
+- Obtenue par le GPS via le `LocationManager` d'Android ; jamais par le Fused Location Provider de Google.
+- Ni enregistrée, ni envoyée : elle sert uniquement à placer le point sur la carte.
+- Option « Première position plus rapide », **désactivée par défaut** : elle ajoute le fournisseur « réseau » d'Android. Sur un téléphone avec les services Google, c'est le système (pas Sente) qui envoie alors à Google les réseaux Wi-Fi et antennes environnants.
+
+### Données enregistrées sur le téléphone
+
+Les cartes installées, la région affichée, l'option de position et, pendant un téléchargement, sa référence. Aucun historique. Tout disparaît à la désinstallation.
 
 ## Engagements permanents
 
@@ -18,13 +46,6 @@ Ce document dit **exactement** ce que Sente envoie, à qui, et pourquoi. Il dist
 - Chaque version est contrôlée : dépendances, permissions et domaines contactés, et vérification Exodus Privacy (aucun traqueur toléré).
 
 ## Prévu dans les prochaines versions
-
-### Dans les deux modes : téléchargement des régions (à partir du lot 1)
-
-- **Destination** : les versions (Releases) GitHub d'un dépôt dédié aux cartes du projet. L'adresse est affichée dans les réglages.
-- **Ce qui est envoyé** : une requête de téléchargement du fichier de la région choisie.
-- **Ce que voit GitHub** : votre adresse IP, l'heure, le fichier demandé et les informations techniques ordinaires d'une requête web. GitHub applique sa propre politique de confidentialité ; Sente n'y ajoute aucun identifiant.
-- **Pour n'avoir aucun échange réseau** : une région pourra être importée à la main depuis un fichier.
 
 ### Mode « local uniquement » (mode par défaut)
 

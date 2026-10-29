@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Sente</string>
-    <string name="version_label">Version %1$s</string>
-    <string name="preview_notice">Préversion de test : l\'application s\'installe et s\'ouvre, rien de plus. Ni accès Internet, ni accès à la position.</string>
 </resources>

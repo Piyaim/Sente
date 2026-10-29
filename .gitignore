@@ -22,3 +22,7 @@ keystore.properties
 .vscode/
 .kotlin/
 .DS_Store
+
+# Outils
+node_modules/
+package-lock.json

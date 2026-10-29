@@ -4,6 +4,20 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-10-29 | Écrans du lot 1 fonctionnels et provisoires ; design Material 3 Expressive avec maquettes à valider avant les écrans de conduite (lot 3) | Tester d'abord la carte hors ligne ; ne pas figer un design sans maquette |
+| 2026-10-29 | Une seule région affichée à la fois (choix dans « Cartes hors ligne ») | Le style Protomaps lit une seule source ; plusieurs régions simultanées demandent une autre organisation des fichiers, à décider avant d'ajouter d'autres régions |
+| 2026-10-29 | Permission « état du Wi-Fi » ajoutée par MapLibre retirée du manifeste | Inutilisée par MapLibre (vérifié dans son code source 13.7.1) |
+| 2026-10-29 | En-tête `User-Agent: Sente` pour le catalogue et les téléchargements | L'en-tête par défaut d'Android contient le modèle du téléphone |
+| 2026-10-29 | Aucune requête réseau automatique : le catalogue n'est lu que sur action de l'utilisateur | Mode local par défaut : rien ne sort du téléphone sans geste explicite |
+| 2026-10-29 | Import manuel d'un fichier `.pmtiles` (vérification de l'en-tête PMTiles v3) | Seul moyen d'installer une carte sans aucun échange réseau |
+| 2026-10-29 | Position par GPS seul par défaut ; fournisseur « réseau » en option désactivée | Sur un téléphone avec services Google, ce fournisseur envoie Wi-Fi et antennes à Google |
+| 2026-10-29 | Position fournie à MapLibre par notre propre lecteur `LocationManager` (`useDefaultLocationEngine(false)`) | Contrôle total de la source : jamais de fournisseur « fused » |
+| 2026-10-29 | Polices Noto Sans (3 plages latines) et icônes Protomaps intégrées à l'APK ; style Protomaps 5.7.2 généré en français par `outils/styles` | Sans elles, la carte hors ligne n'aurait ni noms ni icônes ; génération reproductible |
+| 2026-10-29 | Régions vérifiées après téléchargement : taille, empreinte SHA-256 du catalogue, en-tête PMTiles | Un fichier abîmé ou incomplet n'est jamais affiché |
+| 2026-10-29 | Téléchargement par le gestionnaire de téléchargements d'Android | Continue écran éteint et reprend après une coupure, sans service maison |
+| 2026-10-29 | Cartes : dépôt `Piyaim/Sente-cartes`, version fixe « regions » (fichiers + `catalogue.json`), découpe rectangulaire de la carte quotidienne Protomaps, zoom maximal 14 | Adresse stable, préversions de l'appli lisibles, fichiers jusqu'à 2 Go ; MapLibre agrandit au-delà du zoom 14 |
+| 2026-10-29 | MapLibre Android 13.7.1 ; Kotlin 2.3.20 (aligné sur MapLibre) | Dernière version stable, lecture PMTiles native |
+| 2026-10-29 | Chaîne de construction : actions checkout v7, setup-java v6, setup-gradle v6 ; machine `ubuntu-24.04` figée | Versions précédentes dépréciées ; éviter une casse surprise lors du passage d'`ubuntu-latest` à Ubuntu 26 |
 | 2026-10-29 | Identifiant d'application `io.github.piyaim.sente` | Convention des projets hébergés sur GitHub, acceptée par F-Droid, indépendante d'un nom de domaine |
 | 2026-10-29 | Android 8.0 minimum (minSdk 26), cible Android 16 (targetSdk 36) | Couvre la quasi-totalité des téléphones en service ; icônes adaptatives natives |
 | 2026-10-29 | Versions : Android Gradle Plugin 8.13.0, Gradle 8.14.3, Kotlin 2.2.0, JDK 17 | Combinaison stable et documentée ; AGP 9 change le DSL, migration reportée à un lot ultérieur |
