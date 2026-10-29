@@ -2,7 +2,7 @@
 
 **Sente** est une application de navigation GPS pour Android, libre et respectueuse de la vie privée. Elle vise le meilleur de Google Maps (carte, recherche, fiches de lieux) et de Waze (guidage voiture, signalements, alertes), sans aucune collecte de données et sans aucun service Google.
 
-> **État actuel : lot 1 en test.** Carte hors ligne d'une région et position GPS. Pas encore de recherche ni d'itinéraire : ne l'utilisez pas pour naviguer.
+> **État actuel : lot 2 en test.** Carte hors ligne, position GPS, recherche d'adresses et de lieux, fiches et favoris. Pas encore d'itinéraire : ne l'utilisez pas pour naviguer.
 
 ## Principes
 
@@ -52,7 +52,8 @@ Kotlin, Jetpack Compose (Material 3), MapLibre Native (carte), tuiles PMTiles is
 
 - Code de l'application : [GNU AGPL v3 ou ultérieure](LICENSE).
 - Données cartographiques : © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), sous licence ODbL ; tuiles et style d'après [Protomaps](https://protomaps.com) (style CC0).
-- Polices Noto Sans : SIL Open Font License. Icônes de carte : dérivées de tangrams/icons (MIT).
+- Adresses : [Base Adresse Nationale](https://adresse.data.gouv.fr), Licence Ouverte 2.0.
+- Polices Noto Sans, Atkinson Hyperlegible Next et Bricolage Grotesque : SIL Open Font License. Icônes de carte : dérivées de tangrams/icons (MIT).
 - Cartes téléchargeables : dépôt [Piyaim/Sente-cartes](https://github.com/Piyaim/Sente-cartes).
 
 ## Contribuer

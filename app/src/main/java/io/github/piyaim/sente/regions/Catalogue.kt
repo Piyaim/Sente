@@ -13,30 +13,30 @@ const val URL_CATALOGUE = "https://github.com/Piyaim/Sente-cartes/releases/downl
 /** En-tête « User-Agent » neutre : sans lui, Android enverrait le modèle du téléphone. */
 const val AGENT_SENTE = "Sente"
 
+data class FichierCatalogue(val url: String, val taille: Long, val sha256: String, val donnees: String?)
+
 data class RegionCatalogue(
     val id: String,
     val nom: String,
-    val url: String,
-    val taille: Long,
-    val sha256: String,
-    val donnees: String?,
+    val carte: FichierCatalogue,
     val zoomMax: Int,
+    val recherche: FichierCatalogue?,
 ) {
-    fun versJson(): String = JSONObject()
-        .put("id", id).put("nom", nom).put("url", url).put("taille", taille)
-        .put("sha256", sha256).put("donnees", donnees ?: "").put("zoom_max", zoomMax)
-        .toString()
+    val tailleTotale: Long get() = carte.taille + (recherche?.taille ?: 0L)
 
     companion object {
-        fun depuisJson(json: JSONObject) = RegionCatalogue(
-            id = json.getString("id"),
-            nom = json.getString("nom"),
-            url = json.getString("url"),
-            taille = json.getLong("taille"),
-            sha256 = json.getString("sha256"),
-            donnees = json.optString("donnees").ifBlank { null },
-            zoomMax = json.optInt("zoom_max", 14),
-        )
+        fun depuisJson(json: JSONObject): RegionCatalogue {
+            val recherche = json.optJSONObject("recherche")?.let {
+                FichierCatalogue(it.getString("url"), it.getLong("taille"), it.getString("sha256"), it.optString("donnees").ifBlank { null })
+            }
+            return RegionCatalogue(
+                id = json.getString("id"),
+                nom = json.getString("nom"),
+                carte = FichierCatalogue(json.getString("url"), json.getLong("taille"), json.getString("sha256"), json.optString("donnees").ifBlank { null }),
+                zoomMax = json.optInt("zoom_max", 14),
+                recherche = recherche?.takeIf { it.url.startsWith("https://") },
+            )
+        }
     }
 }
 
@@ -55,7 +55,7 @@ object Catalogue {
             val regions = JSONObject(texte).getJSONArray("regions")
             (0 until regions.length())
                 .map { RegionCatalogue.depuisJson(regions.getJSONObject(it)) }
-                .filter { DepotRegions.idValide(it.id) && it.url.startsWith("https://") }
+                .filter { DepotRegions.idValide(it.id) && it.carte.url.startsWith("https://") }
         } finally {
             connexion.disconnect()
         }

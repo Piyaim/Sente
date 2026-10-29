@@ -2,7 +2,7 @@
 
 Ce document dit **exactement** ce que Sente envoie, à qui, et pourquoi. Il distingue ce qui existe **aujourd'hui** de ce qui est **prévu**. Il est mis à jour à chaque version qui change un échange réseau ou une permission.
 
-## Version actuelle (préversions 0.1.x : carte hors ligne)
+## Version actuelle (préversions 0.2.x : carte, recherche et favoris hors ligne)
 
 ### Permissions Android
 
@@ -20,11 +20,22 @@ La permission « état du Wi-Fi », ajoutée par MapLibre, est retirée. Les not
 Aucune connexion au démarrage ni en arrière-plan. Seulement, à votre demande :
 
 - **Liste des régions** : `catalogue.json` sur `github.com` (dépôt Piyaim/Sente-cartes), redirigé par GitHub vers ses serveurs de fichiers (`*.githubusercontent.com`).
-- **Fichier d'une région** : même origine, téléchargé par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
+- **Fichiers d'une région** (carte, puis recherche) : même origine, téléchargés par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
 - Dans les deux cas, Sente envoie l'en-tête `User-Agent: Sente` à la place de celui d'Android, qui contiendrait le modèle du téléphone. GitHub voit votre adresse IP et l'heure.
-- **Sans aucun réseau** : copiez un fichier `.pmtiles` sur le téléphone et utilisez « Importer un fichier ».
+- **Sans aucun réseau** : copiez les fichiers `.pmtiles` et `.recherche.db` sur le téléphone et utilisez « Importer un fichier ».
 
-La carte elle-même (MapLibre) ne contacte aucun serveur : style, polices, icônes et carte sont lus sur le téléphone.
+La carte (MapLibre) et la recherche ne contactent aucun serveur : style, polices, icônes, carte et index de recherche sont lus sur le téléphone. Ce que vous tapez dans la recherche ne sort pas du téléphone.
+
+### Quand vous quittez Sente
+
+Quatre boutons de la fiche d'un lieu ouvrent une autre appli, seulement quand vous les touchez :
+
+- **Appeler** ouvre le clavier du téléphone avec le numéro ;
+- **Site web** ouvre le site du lieu dans votre navigateur ;
+- **Corriger une erreur** ouvre la page du lieu sur openstreetmap.org dans votre navigateur ;
+- **Partager** envoie le nom, l'adresse et la position du lieu à l'appli que vous choisissez.
+
+Ce que fait ensuite cette autre appli ne dépend plus de Sente.
 
 ### Position
 
@@ -34,7 +45,9 @@ La carte elle-même (MapLibre) ne contacte aucun serveur : style, polices, icôn
 
 ### Données enregistrées sur le téléphone
 
-Les cartes installées, la région affichée, l'option de position et, pendant un téléchargement, sa référence. Aucun historique. Tout disparaît à la désinstallation.
+- Les cartes et index de recherche installés, la région affichée, l'option de position et, pendant un téléchargement, sa référence.
+- Vos favoris et leurs listes, domicile et travail, et vos 30 dernières recherches ouvertes (le lieu choisi, pas ce que vous avez tapé), dans une base privée à l'appli.
+- Rien de cela n'est envoyé. « Cartes et réglages » → « Mes données » permet de tout exporter en JSON ou de tout effacer d'un geste. Tout disparaît aussi à la désinstallation ; la sauvegarde automatique d'Android est désactivée pour Sente.
 
 ## Engagements permanents
 

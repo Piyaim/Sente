@@ -64,6 +64,8 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         portee.launch {
             try {
                 catalogue = Catalogue.charger()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 message = "Catalogue indisponible : ${e.message ?: "erreur réseau"}"
             } finally {
@@ -72,13 +74,28 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         }
     }
 
-    fun telecharger(region: RegionCatalogue) {
+    /** Ce qu'il reste à télécharger pour une région du catalogue, au vu de ce qui est installé. */
+    fun aTelecharger(region: RegionCatalogue): List<Tache> {
+        val installee = installees.firstOrNull { it.id == region.id }
+        val taches = mutableListOf<Tache>()
+        if (installee == null || plusRecent(region.carte.donnees, installee.donnees)) {
+            taches += Tache(region.id, region.nom, TypeFichier.CARTE, region.carte)
+        }
+        val recherche = region.recherche
+        if (recherche != null && (installee?.recherche == null || plusRecent(recherche.donnees, installee.rechercheDonnees))) {
+            taches += Tache(region.id, region.nom, TypeFichier.RECHERCHE, recherche)
+        }
+        return taches
+    }
+
+    fun telecharger(taches: List<Tache>) {
+        if (taches.isEmpty()) return
         if (telechargements.enCours() != null) {
             message = "Un téléchargement est déjà en cours."
             return
         }
         try {
-            telechargements.lancer(region)
+            telechargements.lancer(taches)
         } catch (e: Exception) {
             message = "Téléchargement impossible : ${e.message}"
             return
@@ -91,7 +108,13 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         if (telechargements.enCours() == null || suivi?.isActive == true) return
         suivi = portee.launch {
             val resultat = try {
-                telechargements.suivre { telechargement = it }
+                telechargements.suivre {
+                    telechargement = it
+                    // La carte est utilisable dès qu'elle est installée, même si la recherche se télécharge encore.
+                    if (it is EtatTelechargement.EnCours && it.tache.type == TypeFichier.RECHERCHE && installees.none { r -> r.id == it.tache.regionId }) {
+                        installees = depot.installees()
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -100,9 +123,9 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
             telechargement = null
             installees = depot.installees()
             resultat
-                .onSuccess { region ->
-                    afficher(region.id)
-                    message = "Carte installée : ${region.nom}"
+                .onSuccess { tache ->
+                    if (affichee == null || idAffichee == null) afficher(tache.regionId)
+                    message = "Région installée : ${tache.regionNom}"
                 }
                 .onFailure { message = it.message ?: "Échec du téléchargement." }
         }
@@ -112,6 +135,7 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         suivi?.cancel()
         telechargements.annuler()
         telechargement = null
+        installees = depot.installees()
     }
 
     fun importer(uri: Uri) {
@@ -119,10 +143,12 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         importEnCours = true
         portee.launch {
             message = try {
-                val region = depot.importer(uri)
+                val texte = depot.importer(uri)
                 installees = depot.installees()
-                afficher(region.id)
-                "Carte importée : ${region.nom}"
+                if (idAffichee == null) affichee?.let { afficher(it.id) }
+                texte
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 "Import impossible : ${e.message}"
             } finally {
@@ -130,4 +156,7 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
             }
         }
     }
+
+    private fun plusRecent(catalogue: String?, installe: String?): Boolean =
+        catalogue != null && (installe == null || catalogue > installe)
 }

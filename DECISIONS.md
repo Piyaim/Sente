@@ -4,6 +4,15 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-10-29 | Le bouton Itinéraire est visible mais annonce l'arrivée du calcul au lot 3 | Fidèle aux maquettes validées, sans promettre une fonction absente |
+| 2026-10-29 | Favoris, listes, domicile, travail et historique dans une base SQLite privée (`perso.db`), sans la bibliothèque Room | Moins de dépendances et d'outils de compilation ; export JSON et effacement en un geste |
+| 2026-10-29 | Les favoris gardent une copie complète du lieu | Ils restent valables quand l'index de recherche est remplacé |
+| 2026-10-29 | Horaires OSM : lecture des formes courantes seulement (jours, plages, « off », « 24/7 ») ; sinon texte brut, sans état ouvert/fermé | Mieux vaut ne rien affirmer qu'afficher « ouvert » à tort |
+| 2026-10-29 | Index SQLite par région (`<region>.recherche.db`) : rues et communes en FTS4 sans contenu, numéros stockés en écart au centre de la rue, lieux OSM filtrés par catégorie | FTS4 est présent sur tous les Android visés (FTS5 ne l'est pas) ; fichier compact |
+| 2026-10-29 | Texte normalisé à l'identique dans le script Python et dans l'appli (minuscules, sans accents ni ponctuation) | Indépendant des réglages de SQLite du téléphone |
+| 2026-10-29 | Adresses : Base Adresse Nationale ; lieux : OpenStreetMap (extraits Geofabrik) ; index publié sous ODbL | Les numéros sont bien plus complets dans la BAN (Licence Ouverte 2.0, compatible) |
+| 2026-10-29 | Identité visuelle validée : vert forêt `#1F4D3A`, or `#E9C46A` réservé au lieu choisi, Atkinson Hyperlegible Next et Bricolage Grotesque intégrées (OFL), formes Material 3 Expressive | Lisibilité d'abord, y compris en conduite ; aucune police téléchargée |
+| 2026-10-29 | Carte d'Auvergne-Rhône-Alpes : 631 Mo (rectangle, zoom 14) | Mesure réelle ; pour la France, garder un fichier par région et passer au contour exact |
 | 2026-10-29 | Écrans du lot 1 fonctionnels et provisoires ; design Material 3 Expressive avec maquettes à valider avant les écrans de conduite (lot 3) | Tester d'abord la carte hors ligne ; ne pas figer un design sans maquette |
 | 2026-10-29 | Une seule région affichée à la fois (choix dans « Cartes hors ligne ») | Le style Protomaps lit une seule source ; plusieurs régions simultanées demandent une autre organisation des fichiers, à décider avant d'ajouter d'autres régions |
 | 2026-10-29 | Permission « état du Wi-Fi » ajoutée par MapLibre retirée du manifeste | Inutilisée par MapLibre (vérifié dans son code source 13.7.1) |

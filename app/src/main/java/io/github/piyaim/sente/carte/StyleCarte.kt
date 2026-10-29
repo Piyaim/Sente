@@ -18,7 +18,7 @@ object StyleCarte {
     }
 
     private fun styleVide(sombre: Boolean): String {
-        val fond = if (sombre) "#121614" else "#F6F1E7"
+        val fond = if (sombre) "#101512" else "#F3F5F1"
         return """{"version":8,"sources":{},"layers":[{"id":"fond","type":"background","paint":{"background-color":"$fond"}}]}"""
     }
 }

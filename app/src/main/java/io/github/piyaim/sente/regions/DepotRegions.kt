@@ -3,6 +3,7 @@ package io.github.piyaim.sente.regions
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import io.github.piyaim.sente.recherche.IndexRecherche
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -11,8 +12,16 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.text.Normalizer
 
-/** Dossier (privé à l'appli) où se trouvent les cartes : <id>.pmtiles + <id>.json (nom, date, origine). */
+/**
+ * Dossier (privé à l'appli) des régions. Pour une région <id> :
+ * <id>.pmtiles (carte), <id>.recherche.db (index de recherche, facultatif), <id>.json (nom, dates, origine).
+ */
 const val DOSSIER_REGIONS = "regions"
+
+enum class TypeFichier(val suffixe: String, val libelle: String) {
+    CARTE(".pmtiles", "carte"),
+    RECHERCHE(".recherche.db", "recherche"),
+}
 
 data class RegionInstallee(
     val id: String,
@@ -22,7 +31,11 @@ data class RegionInstallee(
     val donnees: String?,
     val origine: String,
     val enTete: EnTetePmtiles,
-)
+    val recherche: File?,
+    val rechercheDonnees: String?,
+) {
+    val tailleRecherche: Long get() = recherche?.length() ?: 0L
+}
 
 class DepotRegions(private val context: Context) {
 
@@ -30,14 +43,17 @@ class DepotRegions(private val context: Context) {
     val dossier: File?
         get() = context.getExternalFilesDir(DOSSIER_REGIONS)?.also { it.mkdirs() }
 
+    fun fichier(id: String, type: TypeFichier): File? = dossier?.let { File(it, id + type.suffixe) }
+
     fun installees(): List<RegionInstallee> {
         val dossier = dossier ?: return emptyList()
-        return dossier.listFiles { f -> f.isFile && f.name.endsWith(".pmtiles") }
+        return dossier.listFiles { f -> f.isFile && f.name.endsWith(TypeFichier.CARTE.suffixe) }
             .orEmpty()
             .mapNotNull { fichier ->
-                val id = fichier.name.removeSuffix(".pmtiles")
+                val id = fichier.name.removeSuffix(TypeFichier.CARTE.suffixe)
                 val enTete = Pmtiles.lireEnTete(fichier) ?: return@mapNotNull null
                 val meta = lireMeta(id)
+                val recherche = File(dossier, id + TypeFichier.RECHERCHE.suffixe).takeIf { it.isFile }
                 RegionInstallee(
                     id = id,
                     nom = meta?.optString("nom").orEmpty().ifBlank { id },
@@ -46,21 +62,26 @@ class DepotRegions(private val context: Context) {
                     donnees = meta?.optString("donnees").orEmpty().ifBlank { null },
                     origine = meta?.optString("origine").orEmpty().ifBlank { "import" },
                     enTete = enTete,
+                    recherche = recherche,
+                    rechercheDonnees = meta?.optString("recherche_donnees").orEmpty().ifBlank { null },
                 )
             }
             .sortedBy { it.nom }
     }
 
     fun supprimer(id: String) {
-        val dossier = dossier ?: return
-        File(dossier, "$id.pmtiles").delete()
-        File(dossier, "$id.json").delete()
+        TypeFichier.entries.forEach { fichier(id, it)?.delete() }
+        dossier?.let { File(it, "$id.json").delete() }
     }
 
-    fun ecrireMeta(id: String, nom: String, donnees: String?, origine: String) {
+    /** Met à jour les informations d'une région ; une valeur null laisse l'ancienne en place. */
+    fun majMeta(id: String, nom: String? = null, donnees: String? = null, origine: String? = null, rechercheDonnees: String? = null) {
         val dossier = dossier ?: return
-        val meta = JSONObject().put("nom", nom).put("origine", origine)
-        if (donnees != null) meta.put("donnees", donnees)
+        val meta = lireMeta(id) ?: JSONObject()
+        nom?.let { meta.put("nom", it) }
+        donnees?.let { meta.put("donnees", it) }
+        origine?.let { meta.put("origine", it) }
+        rechercheDonnees?.let { meta.put("recherche_donnees", it) }
         File(dossier, "$id.json").writeText(meta.toString())
     }
 
@@ -69,27 +90,47 @@ class DepotRegions(private val context: Context) {
         return if (fichier.exists()) runCatching { JSONObject(fichier.readText()) }.getOrNull() else null
     }
 
-    /** Copie un fichier choisi par l'utilisateur ; aucun accès réseau. */
-    suspend fun importer(uri: Uri): RegionInstallee = withContext(Dispatchers.IO) {
+    /**
+     * Copie un fichier choisi par l'utilisateur (carte .pmtiles ou index de recherche .db), sans accès réseau.
+     * Renvoie un message pour l'utilisateur.
+     */
+    suspend fun importer(uri: Uri): String = withContext(Dispatchers.IO) {
         val dossier = dossier ?: throw IOException("Stockage de l'appli indisponible.")
-        val nomFichier = nomAffiche(uri) ?: "region.pmtiles"
-        val nomLisible = nomFichier.removeSuffix(".pmtiles")
-        val id = identifiant(nomLisible)
+        val nomFichier = nomAffiche(uri) ?: "region"
         val temporaire = File(dossier, "import.part")
         try {
             val entree = context.contentResolver.openInputStream(uri)
                 ?: throw IOException("Impossible d'ouvrir le fichier.")
             entree.use { source -> temporaire.outputStream().use { source.copyTo(it, 1 shl 20) } }
-            Pmtiles.lireEnTete(temporaire)
-                ?: throw IOException("Ce fichier n'est pas une carte PMTiles (version 3).")
-            val destination = File(dossier, "$id.pmtiles")
-            destination.delete()
-            if (!temporaire.renameTo(destination)) throw IOException("Impossible d'enregistrer la carte.")
-            ecrireMeta(id, nomLisible, null, "import")
-            installees().first { it.id == id }
+
+            if (Pmtiles.lireEnTete(temporaire) != null) {
+                val nomLisible = nomFichier.substringBeforeLast('.')
+                val id = identifiant(nomLisible)
+                remplacer(temporaire, File(dossier, id + TypeFichier.CARTE.suffixe))
+                majMeta(id, nom = lireMeta(id)?.optString("nom")?.ifBlank { null } ?: nomLisible, origine = "import")
+                return@withContext "Carte importée : $nomLisible"
+            }
+
+            val meta = IndexRecherche.lireMeta(temporaire)
+                ?: throw IOException("Ce fichier n'est ni une carte PMTiles ni un index de recherche Sente.")
+            val id = meta["region"]?.takeIf { idValide(it) }
+                ?: throw IOException("Index de recherche sans région valide.")
+            remplacer(temporaire, File(dossier, id + TypeFichier.RECHERCHE.suffixe))
+            majMeta(id, rechercheDonnees = meta["donnees"])
+            val nom = lireMeta(id)?.optString("nom")?.ifBlank { null } ?: id
+            if (fichier(id, TypeFichier.CARTE)?.exists() == true) {
+                "Recherche importée pour $nom"
+            } else {
+                "Recherche importée pour $nom : importez aussi sa carte pour l'utiliser."
+            }
         } finally {
             temporaire.delete()
         }
+    }
+
+    private fun remplacer(source: File, destination: File) {
+        destination.delete()
+        if (!source.renameTo(destination)) throw IOException("Impossible d'enregistrer le fichier.")
     }
 
     private fun nomAffiche(uri: Uri): String? =
