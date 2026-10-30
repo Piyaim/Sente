@@ -31,7 +31,7 @@ Ouvrez un ticket (« Issue ») en indiquant : version de Sente, modèle de tél�
 
 ## Construction
 
-Les APK officiels sont construits et signés uniquement par GitHub Actions (fichier `.github/workflows/preversion.yml`). Pour construire localement une version de développement non signée : JDK 17 et SDK Android requis, puis `./gradlew :app:assembleDebug`.
+Les APK officiels sont construits et signés uniquement par GitHub Actions (fichier `.github/workflows/preversion.yml`). Pour construire localement une version de développement non signée : JDK 21 et SDK Android requis, puis `./gradlew :app:assembleDebug`.
 
 ## Licence
 

@@ -51,6 +51,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.piyaim.sente.itineraire.Trajet
 import io.github.piyaim.sente.perso.Raccourci
 import io.github.piyaim.sente.position.SourcePosition
 import io.github.piyaim.sente.recherche.Lieu
@@ -71,6 +72,8 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.json.JSONArray
@@ -83,6 +86,7 @@ private const val ZOOM_POSITION = 15.0
 private const val ZOOM_LIEU = 16.0
 private const val SOURCE_SELECTION = "sente-selection"
 private const val SOURCE_CATEGORIE = "sente-categorie"
+private const val SOURCE_TRAJET = "sente-trajet"
 private val MARGE_BAS_CATEGORIE = 300.dp // bande du bas et bouton de position
 private val MARGE_HAUT_CATEGORIE = 190.dp // barre de catégorie et bouton « Liste »
 
@@ -104,7 +108,8 @@ fun CarteEcran(
     onPointCategorie: (Int) -> Unit = {},
     onListeCategorie: () -> Unit = {},
     onFermerCategorie: () -> Unit = {},
-    bandeauCategorie: (@Composable () -> Unit)? = null,
+    trajet: Trajet? = null,
+    bandeauBas: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -228,21 +233,38 @@ fun CarteEcran(
     val margeHaut = with(densite) { MARGE_HAUT_CATEGORIE.toPx() }
     val margeCote = with(densite) { 48.dp.toPx() }
     val couleurPoints = MaterialTheme.colorScheme.primary.toArgb()
-    LaunchedEffect(style, selection, categorie) {
+    val couleurTrajet = MaterialTheme.colorScheme.primary.toArgb()
+    LaunchedEffect(style, selection, categorie, trajet) {
         val s = style ?: return@LaunchedEffect
-        majPointsCategorie(s, categorie?.lieux.orEmpty(), couleurPoints)
-        majRepere(s, selection ?: categorie?.choisi)
+        // Ordre d'empilement : tracé, puis points de catégorie, puis repère doré au-dessus.
+        majTrace(s, trajet, couleurTrajet)
+        majPointsCategorie(s, if (trajet == null) categorie?.lieux.orEmpty() else emptyList(), couleurPoints)
+        majRepere(s, selection ?: trajet?.arrivee ?: categorie?.choisi)
     }
     var listeCadree by remember { mutableStateOf<List<Lieu>?>(null) }
-    LaunchedEffect(carte, selection, categorie) {
+    LaunchedEffect(carte, selection, categorie, trajet) {
         val m = carte ?: return@LaunchedEffect
         val vue = categorie
-        if (selection != null || vue != null) {
+        if (selection != null || vue != null || trajet != null) {
             if (composantActif) m.locationComponent.setCameraMode(CameraMode.NONE)
             dejaCentreSurPosition = true
         }
         when {
             selection != null -> versLieu(m, selection, margeFiche)
+            trajet != null -> {
+                // Tout le tracé à l'écran, au-dessus de la bande du bas.
+                val bornes = runCatching {
+                    LatLngBounds.Builder().includes(trajet.points.map { LatLng(it.lat, it.lon) }).build()
+                }.getOrNull()
+                if (bornes != null) {
+                    m.animateCamera(
+                        CameraUpdateFactory.newLatLngBounds(
+                            bornes, margeCote.toInt(), margeCote.toInt() * 2, margeCote.toInt(), margeBande.toInt(),
+                        ),
+                        600,
+                    )
+                }
+            }
             vue != null -> {
                 val nouvelle = listeCadree != vue.lieux
                 listeCadree = vue.lieux
@@ -319,9 +341,20 @@ fun CarteEcran(
                     style = MaterialTheme.typography.labelMedium,
                 )
             }
-            val modeCategorie = selection == null && categorie != null
+            val modeTrajet = selection == null && trajet != null
+            val modeCategorie = selection == null && trajet == null && categorie != null
 
-            if (modeCategorie && categorie != null) {
+            if (modeTrajet) {
+                Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                        if (region != null) attribution(Modifier)
+                        Spacer(Modifier.weight(1f))
+                        BoutonIcone(Icones.Viseur, "Centrer sur ma position", centrer, rayon = 20.dp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    bandeauBas?.invoke()
+                }
+            } else if (modeCategorie && categorie != null) {
                 Column(
                     modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -337,7 +370,7 @@ fun CarteEcran(
                         BoutonIcone(Icones.Viseur, "Centrer sur ma position", centrer, rayon = 20.dp)
                     }
                     Spacer(Modifier.height(12.dp))
-                    bandeauCategorie?.invoke()
+                    bandeauBas?.invoke()
                 }
             } else if (selection == null) {
                 Column(
@@ -383,7 +416,7 @@ fun CarteEcran(
                 )
             }
 
-            if (region != null && !modeCategorie) {
+            if (region != null && !modeCategorie && !modeTrajet) {
                 attribution(
                     Modifier
                         .align(if (selection == null) Alignment.BottomStart else Alignment.TopEnd)
@@ -485,6 +518,47 @@ private fun versLieu(carte: MapLibreMap, lieu: Lieu, margeBas: Double) {
         ),
         600,
     )
+}
+
+/** Tracé du trajet : trait vert bordé de blanc, sous les points et le repère. */
+private fun majTrace(style: Style, trajet: Trajet?, couleur: Int) {
+    val coordonnees = JSONArray()
+    trajet?.points?.forEach { coordonnees.put(JSONArray().put(it.lon).put(it.lat)) }
+    val geojson = if (coordonnees.length() < 2) {
+        """{"type":"FeatureCollection","features":[]}"""
+    } else {
+        JSONObject()
+            .put("type", "Feature")
+            .put("properties", JSONObject())
+            .put("geometry", JSONObject().put("type", "LineString").put("coordinates", coordonnees))
+            .toString()
+    }
+    val source = style.getSourceAs<GeoJsonSource>(SOURCE_TRAJET)
+    if (source != null) {
+        source.setGeoJson(geojson)
+        return
+    }
+    style.addSource(GeoJsonSource(SOURCE_TRAJET, geojson))
+    val bord = LineLayer("$SOURCE_TRAJET-bord", SOURCE_TRAJET).withProperties(
+        PropertyFactory.lineColor("#FFFFFF"),
+        PropertyFactory.lineWidth(10f),
+        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+    )
+    val trait = LineLayer("$SOURCE_TRAJET-trait", SOURCE_TRAJET).withProperties(
+        PropertyFactory.lineColor(couleur),
+        PropertyFactory.lineWidth(6f),
+        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+    )
+    val dessous = listOf("$SOURCE_CATEGORIE-point", "$SOURCE_SELECTION-halo").firstOrNull { style.getLayer(it) != null }
+    if (dessous != null) {
+        style.addLayerBelow(bord, dessous)
+        style.addLayerBelow(trait, dessous)
+    } else {
+        style.addLayer(bord)
+        style.addLayer(trait)
+    }
 }
 
 /** Points verts des résultats d'une catégorie, sous le repère doré. Le numéro « i » sert au toucher. */

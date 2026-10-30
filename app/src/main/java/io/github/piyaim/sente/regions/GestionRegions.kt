@@ -85,6 +85,10 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         if (recherche != null && (installee?.recherche == null || plusRecent(recherche.donnees, installee.rechercheDonnees))) {
             taches += Tache(region.id, region.nom, TypeFichier.RECHERCHE, recherche)
         }
+        val routage = region.routage
+        if (routage != null && (installee?.routage == null || plusRecent(routage.donnees, installee.routageDonnees))) {
+            taches += Tache(region.id, region.nom, TypeFichier.ROUTAGE, routage)
+        }
         return taches
     }
 
@@ -111,7 +115,7 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
                 telechargements.suivre {
                     telechargement = it
                     // La carte est utilisable dès qu'elle est installée, même si la recherche se télécharge encore.
-                    if (it is EtatTelechargement.EnCours && it.tache.type == TypeFichier.RECHERCHE && installees.none { r -> r.id == it.tache.regionId }) {
+                    if (it is EtatTelechargement.EnCours && it.tache.type != TypeFichier.CARTE && installees.none { r -> r.id == it.tache.regionId }) {
                         installees = depot.installees()
                     }
                 }

@@ -128,6 +128,15 @@ fun RegionsEcran(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                Text(
+                                    if (region.routage != null) {
+                                        listOfNotNull("Itinéraire ${tailleLisible(region.tailleRoutage)}", dateLisible(region.routageDonnees)?.let { "du $it" }).joinToString(" · ")
+                                    } else {
+                                        "Itinéraire non installé"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                             TextButton(onClick = { aSupprimer = region }) { Text("Supprimer") }
                         }
@@ -179,6 +188,7 @@ fun RegionsEcran(
                                                     listOfNotNull(
                                                         "Carte ${tailleLisible(region.carte.taille)}",
                                                         region.recherche?.let { "recherche ${tailleLisible(it.taille)}" },
+                                                        region.routage?.let { "itinéraire ${tailleLisible(it.taille)}" },
                                                     ).joinToString(" · "),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -191,6 +201,8 @@ fun RegionsEcran(
                                                         when {
                                                             !installee -> "Télécharger"
                                                             taches.all { it.type == TypeFichier.RECHERCHE } -> "Ajouter la recherche"
+                                                            taches.all { it.type == TypeFichier.ROUTAGE } -> "Ajouter l'itinéraire"
+                                                            taches.none { it.type == TypeFichier.CARTE } -> "Compléter"
                                                             else -> "Mettre à jour"
                                                         },
                                                     )
@@ -206,7 +218,7 @@ fun RegionsEcran(
 
                 Section("Importer un fichier") {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Paragraphe("Pour n'avoir aucun échange réseau : copiez sur le téléphone la carte (.pmtiles) et la recherche (.recherche.db) d'une région, puis importez-les.")
+                        Paragraphe("Pour n'avoir aucun échange réseau : copiez sur le téléphone la carte (.pmtiles), la recherche (.recherche.db) et l'itinéraire (.routage.tar, sans le renommer) d'une région, puis importez-les.")
                         OutlinedButton(onClick = { choixFichier.launch(arrayOf("*/*")) }, enabled = !gestion.importEnCours) {
                             Text(if (gestion.importEnCours) "Import en cours…" else "Choisir un fichier")
                         }
@@ -258,7 +270,7 @@ fun RegionsEcran(
         AlertDialog(
             onDismissRequest = { aSupprimer = null },
             title = { Text("Supprimer ${region.nom} ?") },
-            text = { Text("La carte et la recherche (${tailleLisible(region.taille + region.tailleRecherche)}) seront effacées du téléphone.") },
+            text = { Text("La carte, la recherche et l'itinéraire (${tailleLisible(region.taille + region.tailleRecherche + region.tailleRoutage)}) seront effacés du téléphone.") },
             confirmButton = {
                 TextButton(onClick = {
                     gestion.supprimer(region.id)
@@ -276,7 +288,8 @@ fun RegionsEcran(
             title = { Text("Télécharger ${region.nom} ?") },
             text = {
                 Text(
-                    taches.joinToString(" et ") { it.type.libelle }.replaceFirstChar { it.uppercase() } +
+                    taches.map { it.type.libelle }.let { l -> if (l.size > 1) l.dropLast(1).joinToString(", ") + " et " + l.last() else l.first() }
+                        .replaceFirstChar { it.uppercase() } +
                         " : ${tailleLisible(total)} depuis github.com. Le Wi-Fi est conseillé. " +
                         "GitHub voit votre adresse IP, comme pour tout téléchargement ; Sente n'envoie aucun identifiant.",
                 )

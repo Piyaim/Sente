@@ -29,6 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import io.github.piyaim.sente.carte.CarteEcran
+import io.github.piyaim.sente.itineraire.BandeTrajet
+import io.github.piyaim.sente.itineraire.MoteurItineraire
+import io.github.piyaim.sente.itineraire.Trajet
 import io.github.piyaim.sente.perso.ChoixListe
 import io.github.piyaim.sente.perso.DonneesPerso
 import io.github.piyaim.sente.perso.FavorisEcran
@@ -65,6 +68,7 @@ private fun AppSente() {
     val gestion = remember { GestionRegions(context.applicationContext, portee) }
     val recherche = remember { GestionRecherche() }
     val perso = remember { DonneesPerso(context.applicationContext) }
+    val moteur = remember { MoteurItineraire(context.applicationContext) }
     val messages = remember { SnackbarHostState() }
 
     var ecran by rememberSaveable { mutableStateOf(Ecran.CARTE) }
@@ -78,6 +82,9 @@ private fun AppSente() {
     var centre by remember { mutableStateOf<Reference?>(null) }
     var versionPerso by remember { mutableStateOf(0) } // relit favoris et historique après une modification
     var choixListePour by remember { mutableStateOf<Lieu?>(null) }
+    // Essai 3a : trajet calculé sur le téléphone, affiché sur la carte (pas encore de guidage).
+    var trajet by remember { mutableStateOf<Trajet?>(null) }
+    var calculEnCours by remember { mutableStateOf(false) }
 
     val historique = remember(versionPerso) { perso.historique() }
     val listes = remember(versionPerso) { perso.listes() }
@@ -125,7 +132,30 @@ private fun AppSente() {
         }
     }
 
-    val itinerairePlusTard = { afficherMessage("Le calcul d'itinéraire arrive dans la prochaine version.") }
+    fun calculerItineraire(vers: Lieu) {
+        val tuiles = gestion.affichee?.routage
+        val depart = position
+        when {
+            tuiles == null -> afficherMessage("Itinéraire non installé : « Cartes et réglages » → « Ajouter l'itinéraire ».")
+            depart == null -> afficherMessage("Position inconnue : attendez le signal GPS pour calculer un trajet.")
+            calculEnCours -> Unit
+            else -> {
+                calculEnCours = true
+                afficherMessage("Calcul de l'itinéraire…")
+                portee.launch {
+                    val resultat = moteur.calculer(tuiles, depart, vers)
+                    calculEnCours = false
+                    resultat
+                        .onSuccess {
+                            messages.currentSnackbarData?.dismiss()
+                            trajet = it
+                            selectionJson = null
+                        }
+                        .onFailure { afficherMessage(it.message ?: "Calcul impossible.") }
+                }
+            }
+        }
+    }
 
     val demandePosition = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         positionAutorisee = positionPreciseAccordee(context)
@@ -139,26 +169,28 @@ private fun AppSente() {
         if (!positionAutorisee) demander()
     }
 
-    BackHandler(enabled = ecran != Ecran.CARTE || selection != null || categorie != null) {
+    BackHandler(enabled = ecran != Ecran.CARTE || selection != null || trajet != null || categorie != null) {
         when {
             ecran != Ecran.CARTE -> ecran = Ecran.CARTE
             selection != null -> selectionJson = null
+            trajet != null -> trajet = null
             else -> categorieJson = null
         }
     }
 
-    val bandeauCategorie: (@Composable () -> Unit)? = if (categorie == null) {
-        null
-    } else {
-        @Composable {
+    val trajetAffiche = trajet
+    val bandeauBas: (@Composable () -> Unit)? = when {
+        trajetAffiche != null -> @Composable { BandeTrajet(trajetAffiche, onFermer = { trajet = null }) }
+        categorie != null -> @Composable {
             CarteCategorie(
                 vue = categorie,
                 reference = position,
                 onFiche = { choisir(categorie.choisi) },
-                onItineraire = itinerairePlusTard,
+                onItineraire = { calculerItineraire(categorie.choisi) },
                 onIndex = ::mettreEnAvant,
             )
         }
+        else -> null
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -193,7 +225,8 @@ private fun AppSente() {
             },
             onListeCategorie = { ecran = Ecran.RECHERCHE },
             onFermerCategorie = { categorieJson = null },
-            bandeauCategorie = bandeauCategorie,
+            trajet = trajet,
+            bandeauBas = bandeauBas,
         )
 
         val lieu = selection
@@ -203,7 +236,7 @@ private fun AppSente() {
                 reference = position,
                 favori = favori,
                 onFermer = { selectionJson = null },
-                onItineraire = itinerairePlusTard,
+                onItineraire = { calculerItineraire(lieu) },
                 onFavori = {
                     if (favori) {
                         perso.retirerFavori(lieu)

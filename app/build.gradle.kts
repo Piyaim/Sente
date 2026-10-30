@@ -20,6 +20,11 @@ android {
         // Fournis par le workflow de préversion (-PversionCode=… -PversionName=…).
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("versionName") as String?) ?: "0.0.0-dev"
+
+        // Code natif (Valhalla) pour les processeurs 64 bits seulement : appli plus légère.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     signingConfigs {
@@ -76,4 +81,5 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.maplibre.android)
+    implementation(libs.valhalla.mobile)
 }

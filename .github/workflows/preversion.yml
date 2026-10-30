@@ -23,11 +23,12 @@ jobs:
       - name: Récupérer le code
         uses: actions/checkout@v7
 
-      - name: Installer Java 17
+      # Java 21 : valhalla-mobile est compilé pour Java 21.
+      - name: Installer Java 21
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: Préparer Gradle (vérifie aussi l'intégrité du wrapper)
         uses: gradle/actions/setup-gradle@v6

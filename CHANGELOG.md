@@ -2,6 +2,18 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
+## [0.3.0-pre1] - 2026-10-30
+
+### Ajouté
+
+- Essai d'itinéraire en voiture, calculé entièrement sur le téléphone (Valhalla) : le bouton Itinéraire d'une fiche ou d'une catégorie trace le trajet depuis votre position, avec durée, distance, heure d'arrivée et temps de calcul. Le guidage viendra ensuite.
+- Téléchargement de l'itinéraire d'une région (« Ajouter l'itinéraire », empreinte vérifiée) et import manuel d'un fichier `.routage.tar`.
+
+### Technique
+
+- Ajout de valhalla-mobile 0.6.4 (MIT), qui embarque Valhalla 3.9.1. Code natif pour les processeurs 64 bits seulement.
+- Construction avec Java 21, exigé par valhalla-mobile.
+
 ## [0.2.1-pre1] - 2026-10-30
 
 ### Ajouté

@@ -2,7 +2,7 @@
 
 Ce document dit **exactement** ce que Sente envoie, à qui, et pourquoi. Il distingue ce qui existe **aujourd'hui** de ce qui est **prévu**. Il est mis à jour à chaque version qui change un échange réseau ou une permission.
 
-## Version actuelle (préversions 0.2.x : carte, recherche et favoris hors ligne)
+## Version actuelle (préversions 0.3.x : carte, recherche, favoris et essai d'itinéraire hors ligne)
 
 ### Permissions Android
 
@@ -20,11 +20,11 @@ La permission « état du Wi-Fi », ajoutée par MapLibre, est retirée. Les not
 Aucune connexion au démarrage ni en arrière-plan. Seulement, à votre demande :
 
 - **Liste des régions** : `catalogue.json` sur `github.com` (dépôt Piyaim/Sente-cartes), redirigé par GitHub vers ses serveurs de fichiers (`*.githubusercontent.com`).
-- **Fichiers d'une région** (carte, puis recherche) : même origine, téléchargés par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
+- **Fichiers d'une région** (carte, recherche, itinéraire) : même origine, téléchargés par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
 - Dans les deux cas, Sente envoie l'en-tête `User-Agent: Sente` à la place de celui d'Android, qui contiendrait le modèle du téléphone. GitHub voit votre adresse IP et l'heure.
-- **Sans aucun réseau** : copiez les fichiers `.pmtiles` et `.recherche.db` sur le téléphone et utilisez « Importer un fichier ».
+- **Sans aucun réseau** : copiez les fichiers `.pmtiles`, `.recherche.db` et `.routage.tar` sur le téléphone et utilisez « Importer un fichier ».
 
-La carte (MapLibre) et la recherche ne contactent aucun serveur : style, polices, icônes, carte et index de recherche sont lus sur le téléphone. Ce que vous tapez dans la recherche ne sort pas du téléphone.
+La carte (MapLibre), la recherche et le calcul d'itinéraire (Valhalla) ne contactent aucun serveur : style, polices, icônes, carte, index de recherche et tuiles d'itinéraire sont lus sur le téléphone. Ce que vous tapez dans la recherche, votre point de départ et votre destination ne sortent pas du téléphone.
 
 ### Quand vous quittez Sente
 
@@ -41,12 +41,12 @@ Ce que fait ensuite cette autre appli ne dépend plus de Sente.
 ### Position
 
 - Obtenue par le GPS via le `LocationManager` d'Android ; jamais par le Fused Location Provider de Google.
-- Ni enregistrée, ni envoyée : elle sert uniquement à placer le point sur la carte.
+- Ni enregistrée, ni envoyée : elle sert uniquement à placer le point sur la carte et de point de départ au calcul d'itinéraire, fait sur le téléphone.
 - Option « Première position plus rapide », **désactivée par défaut** : elle ajoute le fournisseur « réseau » d'Android. Sur un téléphone avec les services Google, c'est le système (pas Sente) qui envoie alors à Google les réseaux Wi-Fi et antennes environnants.
 
 ### Données enregistrées sur le téléphone
 
-- Les cartes et index de recherche installés, la région affichée, l'option de position et, pendant un téléchargement, sa référence.
+- Les cartes, index de recherche et tuiles d'itinéraire installés, la région affichée, l'option de position et, pendant un téléchargement, sa référence.
 - Vos favoris et leurs listes, domicile et travail, et vos 30 dernières recherches ouvertes (le lieu choisi, pas ce que vous avez tapé), dans une base privée à l'appli.
 - Rien de cela n'est envoyé. « Cartes et réglages » → « Mes données » permet de tout exporter en JSON ou de tout effacer d'un geste. Tout disparaît aussi à la désinstallation ; la sauvegarde automatique d'Android est désactivée pour Sente.
 

@@ -21,20 +21,23 @@ data class RegionCatalogue(
     val carte: FichierCatalogue,
     val zoomMax: Int,
     val recherche: FichierCatalogue?,
+    val routage: FichierCatalogue? = null,
 ) {
-    val tailleTotale: Long get() = carte.taille + (recherche?.taille ?: 0L)
+    val tailleTotale: Long get() = carte.taille + (recherche?.taille ?: 0L) + (routage?.taille ?: 0L)
 
     companion object {
         fun depuisJson(json: JSONObject): RegionCatalogue {
-            val recherche = json.optJSONObject("recherche")?.let {
+            fun complement(cle: String) = json.optJSONObject(cle)?.let {
                 FichierCatalogue(it.getString("url"), it.getLong("taille"), it.getString("sha256"), it.optString("donnees").ifBlank { null })
-            }
+            }?.takeIf { it.url.startsWith("https://") }
+            val recherche = complement("recherche")
             return RegionCatalogue(
                 id = json.getString("id"),
                 nom = json.getString("nom"),
                 carte = FichierCatalogue(json.getString("url"), json.getLong("taille"), json.getString("sha256"), json.optString("donnees").ifBlank { null }),
                 zoomMax = json.optInt("zoom_max", 14),
-                recherche = recherche?.takeIf { it.url.startsWith("https://") },
+                recherche = recherche,
+                routage = complement("routage"),
             )
         }
     }

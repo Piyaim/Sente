@@ -3,6 +3,7 @@ package io.github.piyaim.sente.regions
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import io.github.piyaim.sente.itineraire.MoteurItineraire
 import io.github.piyaim.sente.recherche.IndexRecherche
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,13 +15,15 @@ import java.text.Normalizer
 
 /**
  * Dossier (privé à l'appli) des régions. Pour une région <id> :
- * <id>.pmtiles (carte), <id>.recherche.db (index de recherche, facultatif), <id>.json (nom, dates, origine).
+ * <id>.pmtiles (carte), <id>.recherche.db (index de recherche, facultatif),
+ * <id>.routage.tar (tuiles d'itinéraire, facultatif), <id>.json (nom, dates, origine).
  */
 const val DOSSIER_REGIONS = "regions"
 
 enum class TypeFichier(val suffixe: String, val libelle: String) {
     CARTE(".pmtiles", "carte"),
     RECHERCHE(".recherche.db", "recherche"),
+    ROUTAGE(".routage.tar", "itinéraire"),
 }
 
 data class RegionInstallee(
@@ -33,8 +36,11 @@ data class RegionInstallee(
     val enTete: EnTetePmtiles,
     val recherche: File?,
     val rechercheDonnees: String?,
+    val routage: File? = null,
+    val routageDonnees: String? = null,
 ) {
     val tailleRecherche: Long get() = recherche?.length() ?: 0L
+    val tailleRoutage: Long get() = routage?.length() ?: 0L
 }
 
 class DepotRegions(private val context: Context) {
@@ -54,6 +60,7 @@ class DepotRegions(private val context: Context) {
                 val enTete = Pmtiles.lireEnTete(fichier) ?: return@mapNotNull null
                 val meta = lireMeta(id)
                 val recherche = File(dossier, id + TypeFichier.RECHERCHE.suffixe).takeIf { it.isFile }
+                val routage = File(dossier, id + TypeFichier.ROUTAGE.suffixe).takeIf { it.isFile }
                 RegionInstallee(
                     id = id,
                     nom = meta?.optString("nom").orEmpty().ifBlank { id },
@@ -64,6 +71,8 @@ class DepotRegions(private val context: Context) {
                     enTete = enTete,
                     recherche = recherche,
                     rechercheDonnees = meta?.optString("recherche_donnees").orEmpty().ifBlank { null },
+                    routage = routage,
+                    routageDonnees = meta?.optString("routage_donnees").orEmpty().ifBlank { null },
                 )
             }
             .sortedBy { it.nom }
@@ -75,13 +84,21 @@ class DepotRegions(private val context: Context) {
     }
 
     /** Met à jour les informations d'une région ; une valeur null laisse l'ancienne en place. */
-    fun majMeta(id: String, nom: String? = null, donnees: String? = null, origine: String? = null, rechercheDonnees: String? = null) {
+    fun majMeta(
+        id: String,
+        nom: String? = null,
+        donnees: String? = null,
+        origine: String? = null,
+        rechercheDonnees: String? = null,
+        routageDonnees: String? = null,
+    ) {
         val dossier = dossier ?: return
         val meta = lireMeta(id) ?: JSONObject()
         nom?.let { meta.put("nom", it) }
         donnees?.let { meta.put("donnees", it) }
         origine?.let { meta.put("origine", it) }
         rechercheDonnees?.let { meta.put("recherche_donnees", it) }
+        routageDonnees?.let { meta.put("routage_donnees", it) }
         File(dossier, "$id.json").writeText(meta.toString())
     }
 
@@ -91,7 +108,8 @@ class DepotRegions(private val context: Context) {
     }
 
     /**
-     * Copie un fichier choisi par l'utilisateur (carte .pmtiles ou index de recherche .db), sans accès réseau.
+     * Copie un fichier choisi par l'utilisateur (carte .pmtiles, index de recherche .db ou tuiles
+     * d'itinéraire <région>.routage.tar), sans accès réseau.
      * Renvoie un message pour l'utilisateur.
      */
     suspend fun importer(uri: Uri): String = withContext(Dispatchers.IO) {
@@ -111,8 +129,18 @@ class DepotRegions(private val context: Context) {
                 return@withContext "Carte importée : $nomLisible"
             }
 
+            // Les tuiles d'itinéraire ne disent pas leur région : on la lit dans le nom « <région>.routage.tar ».
+            if (MoteurItineraire.estTuilesValhalla(temporaire)) {
+                val id = nomFichier.removeSuffix(TypeFichier.ROUTAGE.suffixe).takeIf { nomFichier.endsWith(TypeFichier.ROUTAGE.suffixe) && idValide(it) }
+                    ?: throw IOException("Tuiles d'itinéraire : gardez le nom d'origine du fichier (<région>.routage.tar).")
+                remplacer(temporaire, File(dossier, id + TypeFichier.ROUTAGE.suffixe))
+                majMeta(id)
+                val nom = lireMeta(id)?.optString("nom")?.ifBlank { null } ?: id
+                return@withContext "Itinéraire importé pour $nom"
+            }
+
             val meta = IndexRecherche.lireMeta(temporaire)
-                ?: throw IOException("Ce fichier n'est ni une carte PMTiles ni un index de recherche Sente.")
+                ?: throw IOException("Ce fichier n'est ni une carte PMTiles, ni un index de recherche, ni des tuiles d'itinéraire Sente.")
             val id = meta["region"]?.takeIf { idValide(it) }
                 ?: throw IOException("Index de recherche sans région valide.")
             remplacer(temporaire, File(dossier, id + TypeFichier.RECHERCHE.suffixe))

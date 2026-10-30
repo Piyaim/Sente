@@ -4,6 +4,11 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-10-30 | Itinéraire : valhalla-mobile 0.6.4 (Valhalla 3.9.1) ; tuiles construites dans Sente-cartes avec la même version | Le format des tuiles change entre versions de Valhalla ; calcul entièrement hors ligne, licence MIT |
+| 2026-10-30 | Guidage (lot 3c) : cœur de Ferrostar, écrans et voix de Sente | Logique de guidage éprouvée, sans remplacer le design validé ; module Google de Ferrostar exclu |
+| 2026-10-30 | Voiture seule au lot 3 ; moto ensuite | Valider d'abord toute la chaîne avec un profil |
+| 2026-10-30 | Code natif pour processeurs 64 bits seulement (`arm64-v8a`) | Appli plus légère ; couvre pratiquement tous les téléphones depuis 2017 |
+| 2026-10-30 | Réglages de Valhalla écrits en JSON par Sente, à partir de ceux fournis avec valhalla-mobile, et tout le paquet gardé par R8 | Évite les erreurs de réflexion après réduction du code |
 | 2026-10-30 | Catégories affichées directement sur la carte, liste à un appui | Choix 2A sur maquette validée, comme les applis de cartes courantes |
 | 2026-10-30 | Horaires manquants : lien vers l'éditeur d'openstreetmap.org, pas de saisie dans Sente | Aucun compte ni envoi à gérer dans l'appli ; l'ajout profite à tout le monde |
 | 2026-10-30 | Numéro accepté en fin de texte (1 à 4 chiffres) ; 5 chiffres en fin restent un code postal | « avenue du plateau 69009 » ne doit pas chercher le numéro 69009 |
