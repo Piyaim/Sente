@@ -36,3 +36,13 @@ Les APK officiels sont construits et signés uniquement par GitHub Actions (fich
 ## Licence
 
 En contribuant, vous acceptez que votre contribution soit publiée sous licence [GNU AGPL v3 ou ultérieure](LICENSE).
+
+## Vérification avant chaque envoi
+
+Le dossier `.githooks` contient une vérification lancée à chaque `git push` : elle bloque l'envoi si un commit contient un fichier de clé, un fichier de plus de 1 Mo, un secret probable (clé privée, jeton, mot de passe en clair, longue chaîne base64) ou un mot de votre liste personnelle (`~/.config/sente/interdits.txt`, jamais publiée). À activer une fois par dossier :
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Pour vérifier tout l'historique : `bash .githooks/pre-push --historique`.

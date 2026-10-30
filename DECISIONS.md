@@ -4,6 +4,7 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-10-30 | Vérification automatique avant chaque envoi (`.githooks/pre-push`) et protection des secrets de GitHub activée | Après la fuite de clé du lot 0 bis : aucun fichier de clé, secret, gros fichier ni donnée personnelle ne doit partir ; la liste personnelle reste hors du dépôt |
 | 2026-10-30 | Petite fenêtre de guidage par l'incrustation d'image d'Android (choix A), pas par la superposition | Aucune permission ; ouverture seulement pendant un guidage ; désactivable dans les réglages Android |
 | 2026-10-30 | Favori renommé : le nom d'origine est gardé à part et sert toujours à reconnaître le lieu | L'étoile reste allumée quand on retrouve le lieu par la recherche |
 | 2026-10-30 | Guidage en arrière-plan avec service de premier plan et notification (choix B) | Le guidage et la voix continuent quand on ouvre une autre appli ; indispensable aussi pour Android Auto (lot 7) |
