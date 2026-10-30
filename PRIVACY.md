@@ -28,11 +28,12 @@ La carte (MapLibre) et la recherche ne contactent aucun serveur : style, polices
 
 ### Quand vous quittez Sente
 
-Quatre boutons de la fiche d'un lieu ouvrent une autre appli, seulement quand vous les touchez :
+Cinq boutons ou liens de la fiche d'un lieu ouvrent une autre appli, seulement quand vous les touchez :
 
 - **Appeler** ouvre le clavier du téléphone avec le numéro ;
 - **Site web** ouvre le site du lieu dans votre navigateur ;
 - **Corriger une erreur** ouvre la page du lieu sur openstreetmap.org dans votre navigateur ;
+- **Les ajouter sur OpenStreetMap** (horaires manquants) ouvre l'éditeur d'openstreetmap.org sur ce lieu, dans votre navigateur ; il faut un compte OpenStreetMap pour enregistrer ;
 - **Partager** envoie le nom, l'adresse et la position du lieu à l'appli que vous choisissez.
 
 Ce que fait ensuite cette autre appli ne dépend plus de Sente.

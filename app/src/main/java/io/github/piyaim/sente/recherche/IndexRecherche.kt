@@ -25,22 +25,27 @@ class IndexRecherche private constructor(private val db: SQLiteDatabase) : Close
         if (normalise.isEmpty()) return Resultats(emptyList(), emptyList())
 
         val numero = Normalisation.separerNumero(normalise)
-        val jetonsVoie = Normalisation.jetons(numero?.second ?: normalise)
         val adresses = mutableListOf<Lieu>()
-        Normalisation.requeteFts(jetonsVoie)?.let { requete ->
-            val voies = voies(requete, jetonsVoie, ref).take(8)
-            if (numero != null) {
-                voies.mapNotNullTo(adresses) { adresse(it, numero.first) }
-            }
-            if (adresses.size < 3) adresses += voies.take(5 - adresses.size).map { it.lieu }
+        val voies = Normalisation.variantes(numero?.second ?: normalise)
+            .flatMap { jetons -> Normalisation.requeteFts(jetons)?.let { voies(it, jetons) }.orEmpty() }
+            .distinctBy { it.id }
+            .sortedBy { distanceMetres(ref.lat, ref.lon, it.lieu.lat, it.lieu.lon) }
+            .take(8)
+        if (numero != null) {
+            voies.mapNotNullTo(adresses) { adresse(it, numero.first) }
         }
+        if (adresses.size < 3) adresses += voies.take(5 - adresses.size).map { it.lieu }
 
         // « boulangerie », « pharmacies »… : les plus proches de la catégorie, plutôt qu'un tirage dans toute la région.
         val categorie = categories[normalise] ?: categories[normalise.removeSuffix("s")]
         val lieux = if (categorie != null) {
             parCategorie(categorie, ref, max)
         } else {
-            Normalisation.requeteFts(Normalisation.jetons(normalise))?.let { lieux(it, ref, normalise, max) }.orEmpty()
+            Normalisation.variantes(normalise)
+                .flatMap { jetons -> Normalisation.requeteFts(jetons)?.let { lieux(it, ref, normalise, max) }.orEmpty() }
+                .distinctBy { it.cle }
+                .sortedWith(ordreLieux(ref, normalise))
+                .take(max)
         }
         return Resultats(adresses.distinctBy { it.cle }.take(max), lieux)
     }
@@ -78,7 +83,7 @@ class IndexRecherche private constructor(private val db: SQLiteDatabase) : Close
      * Rues correspondant à la requête. Au moins un mot doit toucher le nom de la rue : taper « lyon » seul
      * ne doit pas sortir des rues au hasard parce que leur commune s'appelle Lyon.
      */
-    private fun voies(requete: String, jetons: List<String>, ref: Reference): List<Voie> =
+    private fun voies(requete: String, jetons: List<String>): List<Voie> =
         db.rawQuery(
             "SELECT id, nom, commune, cp, lat, lon FROM voies WHERE id IN " +
                 "(SELECT docid FROM voies_fts WHERE voies_fts MATCH ? LIMIT 1500)",
@@ -103,7 +108,7 @@ class IndexRecherche private constructor(private val db: SQLiteDatabase) : Close
         }.filter { voie ->
             val mots = Normalisation.normaliser(voie.lieu.nom).split(' ')
             jetons.any { j -> mots.any { it.startsWith(j) } && j !in MOTS_VIDES }
-        }.sortedBy { distanceMetres(ref.lat, ref.lon, it.lieu.lat, it.lieu.lon) }
+        }
 
     private fun adresse(voie: Voie, numero: String): Lieu? =
         db.rawQuery("SELECT dlat, dlon FROM numeros WHERE voie = ? AND num = ?", arrayOf(voie.id.toString(), numero))
@@ -125,15 +130,15 @@ class IndexRecherche private constructor(private val db: SQLiteDatabase) : Close
             "SELECT $COLONNES_LIEU FROM lieux WHERE id IN (SELECT docid FROM lieux_fts WHERE lieux_fts MATCH ? LIMIT 2000)",
             arrayOf(requete),
         ).use { c -> c.liste { lireLieu(it) } }
-            // Un nom qui commence par ce qu'on a tapé passe devant ; puis communes ; puis le plus proche.
-            .sortedWith(
-                compareBy<Lieu>(
-                    { if (Normalisation.normaliser(it.nom).startsWith(normalise)) 0 else 1 },
-                    { if (it.type == TypeLieu.COMMUNE) 0 else 1 },
-                    { distanceMetres(ref.lat, ref.lon, it.lat, it.lon) },
-                ),
-            )
+            .sortedWith(ordreLieux(ref, normalise))
             .take(max)
+
+    /** Un nom qui commence par ce qu'on a tapé passe devant ; puis communes ; puis le plus proche. */
+    private fun ordreLieux(ref: Reference, normalise: String) = compareBy<Lieu>(
+        { if (Normalisation.normaliser(it.nom).startsWith(normalise)) 0 else 1 },
+        { if (it.type == TypeLieu.COMMUNE) 0 else 1 },
+        { distanceMetres(ref.lat, ref.lon, it.lat, it.lon) },
+    )
 
     private fun lireLieu(c: Cursor): Lieu {
         val code = c.getString(1)

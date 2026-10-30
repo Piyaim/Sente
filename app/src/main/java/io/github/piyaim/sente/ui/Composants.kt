@@ -78,17 +78,18 @@ fun BoutonIcone(
     fond: Color = MaterialTheme.colorScheme.surface,
     encre: Color = MaterialTheme.colorScheme.primary,
     ombre: Boolean = true,
+    actif: Boolean = true,
 ) {
     Box(
         modifier = modifier
             .then(if (ombre) Modifier.shadow(2.dp, RoundedCornerShape(rayon)) else Modifier)
             .clip(RoundedCornerShape(rayon))
             .background(fond)
-            .clickable(role = Role.Button, onClickLabel = description, onClick = onClick)
+            .clickable(enabled = actif, role = Role.Button, onClickLabel = description, onClick = onClick)
             .size(taille),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icone, contentDescription = description, tint = encre, modifier = Modifier.size(24.dp))
+        Icon(icone, contentDescription = description, tint = if (actif) encre else encre.copy(alpha = 0.38f), modifier = Modifier.size(24.dp))
     }
 }
 

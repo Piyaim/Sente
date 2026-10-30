@@ -2,6 +2,7 @@ package io.github.piyaim.sente.carte
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.RectF
 import android.location.Location
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,12 +10,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,10 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -49,6 +54,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.piyaim.sente.perso.Raccourci
 import io.github.piyaim.sente.position.SourcePosition
 import io.github.piyaim.sente.recherche.Lieu
+import io.github.piyaim.sente.recherche.VueCategorie
 import io.github.piyaim.sente.regions.RegionInstallee
 import io.github.piyaim.sente.ui.BoutonIcone
 import io.github.piyaim.sente.ui.Icones
@@ -57,6 +63,7 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
@@ -66,6 +73,8 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.max
 
@@ -73,6 +82,9 @@ private const val ZOOM_REGION = 7.5
 private const val ZOOM_POSITION = 15.0
 private const val ZOOM_LIEU = 16.0
 private const val SOURCE_SELECTION = "sente-selection"
+private const val SOURCE_CATEGORIE = "sente-categorie"
+private val MARGE_BAS_CATEGORIE = 300.dp // bande du bas et bouton de position
+private val MARGE_HAUT_CATEGORIE = 190.dp // barre de catégorie et bouton « Liste »
 
 @Composable
 fun CarteEcran(
@@ -88,11 +100,18 @@ fun CarteEcran(
     onFavoris: () -> Unit,
     onPosition: (Location) -> Unit,
     onCentre: (Double, Double) -> Unit,
+    categorie: VueCategorie? = null,
+    onPointCategorie: (Int) -> Unit = {},
+    onListeCategorie: () -> Unit = {},
+    onFermerCategorie: () -> Unit = {},
+    bandeauCategorie: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val surPosition by rememberUpdatedState(onPosition)
     val surCentre by rememberUpdatedState(onCentre)
+    val surPointCategorie by rememberUpdatedState(onPointCategorie)
+    val toleranceTouche = with(LocalDensity.current) { 24.dp.toPx() }
 
     val vueCarte = remember {
         MapLibre.getInstance(context)
@@ -127,6 +146,14 @@ fun CarteEcran(
             m.uiSettings.setLogoEnabled(false)
             m.uiSettings.setAttributionEnabled(false) // remplacée par notre mention permanente ci-dessous
             m.addOnCameraIdleListener { m.cameraPosition.target?.let { surCentre(it.latitude, it.longitude) } }
+            // Toucher un point d'une catégorie le met en avant (un peu de marge : les points sont petits).
+            m.addOnMapClickListener { point ->
+                val p = m.projection.toScreenLocation(point)
+                val zone = RectF(p.x - toleranceTouche, p.y - toleranceTouche, p.x + toleranceTouche, p.y + toleranceTouche)
+                val i = m.queryRenderedFeatures(zone, "$SOURCE_CATEGORIE-point").firstOrNull()?.getNumberProperty("i")?.toInt()
+                if (i != null) surPointCategorie(i)
+                i != null
+            }
             carte = m
         }
     }
@@ -194,30 +221,52 @@ fun CarteEcran(
         }
     }
 
-    // Lieu choisi : repère doré et caméra centrée au-dessus de la fiche.
-    val margeFiche = with(LocalDensity.current) { (LocalConfiguration.current.screenHeightDp * 0.55f).dp.toPx() }.toDouble()
-    LaunchedEffect(style, selection) {
+    // Lieu choisi (ou mis en avant dans une catégorie) : repère doré ; caméra au-dessus de la fiche ou de la bande.
+    val densite = LocalDensity.current
+    val margeFiche = with(densite) { (LocalConfiguration.current.screenHeightDp * 0.55f).dp.toPx() }.toDouble()
+    val margeBande = with(densite) { MARGE_BAS_CATEGORIE.toPx() }
+    val margeHaut = with(densite) { MARGE_HAUT_CATEGORIE.toPx() }
+    val margeCote = with(densite) { 48.dp.toPx() }
+    val couleurPoints = MaterialTheme.colorScheme.primary.toArgb()
+    LaunchedEffect(style, selection, categorie) {
         val s = style ?: return@LaunchedEffect
-        majRepere(s, selection)
+        majPointsCategorie(s, categorie?.lieux.orEmpty(), couleurPoints)
+        majRepere(s, selection ?: categorie?.choisi)
     }
-    LaunchedEffect(carte, selection) {
+    var listeCadree by remember { mutableStateOf<List<Lieu>?>(null) }
+    LaunchedEffect(carte, selection, categorie) {
         val m = carte ?: return@LaunchedEffect
-        if (selection != null) {
+        val vue = categorie
+        if (selection != null || vue != null) {
             if (composantActif) m.locationComponent.setCameraMode(CameraMode.NONE)
             dejaCentreSurPosition = true
-            val zoom = max(m.cameraPosition.zoom, ZOOM_LIEU)
-            m.animateCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder()
-                        .target(LatLng(selection.lat, selection.lon))
-                        .zoom(zoom)
-                        .padding(0.0, 0.0, 0.0, margeFiche)
-                        .build(),
-                ),
-                600,
-            )
-        } else {
-            m.animateCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0), 300)
+        }
+        when {
+            selection != null -> versLieu(m, selection, margeFiche)
+            vue != null -> {
+                val nouvelle = listeCadree != vue.lieux
+                listeCadree = vue.lieux
+                // Nouvelle liste : on montre tous les points ; ensuite on suit le lieu mis en avant.
+                val bornes = if (nouvelle && vue.lieux.size > 1) {
+                    runCatching { LatLngBounds.Builder().includes(vue.lieux.map { LatLng(it.lat, it.lon) }).build() }.getOrNull()
+                } else {
+                    null
+                }
+                if (bornes != null) {
+                    m.animateCamera(
+                        CameraUpdateFactory.newLatLngBounds(
+                            bornes, margeCote.toInt(), margeHaut.toInt(), margeCote.toInt(), margeBande.toInt(),
+                        ),
+                        600,
+                    )
+                } else {
+                    versLieu(m, vue.choisi, margeBande.toDouble())
+                }
+            }
+            else -> {
+                listeCadree = null
+                m.animateCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0), 300)
+            }
         }
     }
 
@@ -252,7 +301,45 @@ fun CarteEcran(
                 .safeDrawingPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            if (selection == null) {
+            val centrer: () -> Unit = {
+                val m = carte
+                when {
+                    !positionAutorisee -> onDemanderPosition()
+                    m != null && composantActif && position != null -> suivrePosition(m)
+                }
+            }
+            val attribution: @Composable (Modifier) -> Unit = { modifier ->
+                Text(
+                    "© OpenStreetMap",
+                    modifier = modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
+                        .clickable(role = Role.Button) { attributionsOuvertes = true }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            val modeCategorie = selection == null && categorie != null
+
+            if (modeCategorie && categorie != null) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    BarreCategorie(categorie, onRetour = onListeCategorie, onFermer = onFermerCategorie)
+                    PastilleCarte(Icones.Liste, "Liste", onListeCategorie)
+                }
+                Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                        if (region != null) attribution(Modifier)
+                        Spacer(Modifier.weight(1f))
+                        BoutonIcone(Icones.Viseur, "Centrer sur ma position", centrer, rayon = 20.dp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    bandeauCategorie?.invoke()
+                }
+            } else if (selection == null) {
                 Column(
                     modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -287,13 +374,7 @@ fun CarteEcran(
                 BoutonIcone(
                     icone = Icones.Viseur,
                     description = "Centrer sur ma position",
-                    onClick = {
-                        val m = carte
-                        when {
-                            !positionAutorisee -> onDemanderPosition()
-                            m != null && composantActif && position != null -> suivrePosition(m)
-                        }
-                    },
+                    onClick = centrer,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 24.dp),
                     taille = 64.dp,
                     rayon = 22.dp,
@@ -302,17 +383,11 @@ fun CarteEcran(
                 )
             }
 
-            if (region != null) {
-                Text(
-                    "© OpenStreetMap",
-                    modifier = Modifier
+            if (region != null && !modeCategorie) {
+                attribution(
+                    Modifier
                         .align(if (selection == null) Alignment.BottomStart else Alignment.TopEnd)
-                        .padding(bottom = if (selection == null) 24.dp else 0.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
-                        .clickable(role = Role.Button) { attributionsOuvertes = true }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
+                        .padding(bottom = if (selection == null) 24.dp else 0.dp),
                 )
             }
         }
@@ -356,6 +431,97 @@ private fun BarreRecherche(onClick: () -> Unit, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
+    }
+}
+
+/** Barre du haut en mode catégorie : retour à la liste, nom de la catégorie, nombre de résultats, fermer. */
+@Composable
+private fun BarreCategorie(vue: VueCategorie, onRetour: () -> Unit, onFermer: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(2.dp, RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .height(56.dp)
+            .padding(start = 4.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BoutonIcone(
+            Icones.Retour, "Retour à la liste", onRetour,
+            taille = 48.dp, rayon = 24.dp, fond = MaterialTheme.colorScheme.surface,
+            encre = MaterialTheme.colorScheme.onSurface, ombre = false,
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            vue.libelle,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            maxLines = 1,
+        )
+        Text(
+            if (vue.lieux.size > 1) "${vue.lieux.size} résultats" else "1 résultat",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(6.dp))
+        BoutonIcone(
+            Icones.Effacer, "Fermer et revenir à la carte", onFermer,
+            taille = 44.dp, rayon = 22.dp, fond = MaterialTheme.colorScheme.secondaryContainer,
+            encre = MaterialTheme.colorScheme.onSurface, ombre = false,
+        )
+    }
+}
+
+/** Caméra centrée sur un lieu, au-dessus d'une fiche ou d'une bande qui occupe [margeBas] pixels en bas. */
+private fun versLieu(carte: MapLibreMap, lieu: Lieu, margeBas: Double) {
+    carte.animateCamera(
+        CameraUpdateFactory.newCameraPosition(
+            CameraPosition.Builder()
+                .target(LatLng(lieu.lat, lieu.lon))
+                .zoom(max(carte.cameraPosition.zoom, ZOOM_LIEU))
+                .padding(0.0, 0.0, 0.0, margeBas)
+                .build(),
+        ),
+        600,
+    )
+}
+
+/** Points verts des résultats d'une catégorie, sous le repère doré. Le numéro « i » sert au toucher. */
+private fun majPointsCategorie(style: Style, lieux: List<Lieu>, couleur: Int) {
+    val points = JSONArray()
+    lieux.forEachIndexed { i, lieu ->
+        points.put(
+            JSONObject()
+                .put("type", "Feature")
+                .put("properties", JSONObject().put("i", i))
+                .put("geometry", JSONObject().put("type", "Point").put("coordinates", JSONArray().put(lieu.lon).put(lieu.lat))),
+        )
+    }
+    val geojson = JSONObject().put("type", "FeatureCollection").put("features", points).toString()
+    val source = style.getSourceAs<GeoJsonSource>(SOURCE_CATEGORIE)
+    if (source != null) {
+        source.setGeoJson(geojson)
+        return
+    }
+    style.addSource(GeoJsonSource(SOURCE_CATEGORIE, geojson))
+    val point = CircleLayer("$SOURCE_CATEGORIE-point", SOURCE_CATEGORIE).withProperties(
+        PropertyFactory.circleRadius(11f),
+        PropertyFactory.circleColor(couleur),
+        PropertyFactory.circleStrokeColor("#FFFFFF"),
+        PropertyFactory.circleStrokeWidth(3f),
+    )
+    val centre = CircleLayer("$SOURCE_CATEGORIE-centre", SOURCE_CATEGORIE).withProperties(
+        PropertyFactory.circleRadius(3.5f),
+        PropertyFactory.circleColor("#FFFFFF"),
+    )
+    // Toujours sous le repère doré, qu'il existe déjà ou non.
+    if (style.getLayer("$SOURCE_SELECTION-halo") != null) {
+        style.addLayerBelow(point, "$SOURCE_SELECTION-halo")
+        style.addLayerBelow(centre, "$SOURCE_SELECTION-halo")
+    } else {
+        style.addLayer(point)
+        style.addLayer(centre)
     }
 }
 

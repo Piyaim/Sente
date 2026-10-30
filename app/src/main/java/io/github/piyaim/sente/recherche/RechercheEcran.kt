@@ -65,22 +65,23 @@ fun RechercheEcran(
     recherche: GestionRecherche,
     reference: Reference?,
     historique: List<Lieu>,
+    categorie: VueCategorie?,
+    onCategorie: (code: String?, libelle: String) -> Unit,
     onChoisir: (Lieu) -> Unit,
     onEffacerHistorique: () -> Unit,
     onRetour: () -> Unit,
     onOuvrirRegions: () -> Unit,
 ) {
     var texte by rememberSaveable { mutableStateOf("") }
-    var categorie by rememberSaveable { mutableStateOf<String?>(null) }
     var resultats by remember { mutableStateOf<Resultats?>(null) }
-    var parCategorie by remember { mutableStateOf<List<Lieu>?>(null) }
     var enCours by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val clavier = LocalSoftwareKeyboardController.current
     val ref = reference ?: region?.let { Reference(it.enTete.latCentre, it.enTete.lonCentre) }
     val indexDisponible = region?.recherche != null
 
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    // Retour depuis la carte d'une catégorie : on montre sa liste, sans ouvrir le clavier.
+    LaunchedEffect(Unit) { if (categorie == null) focus.requestFocus() }
 
     // Recherche au fil de la frappe, après une courte pause.
     LaunchedEffect(texte, region?.recherche?.absolutePath) {
@@ -92,19 +93,6 @@ fun RechercheEcran(
         enCours = true
         try {
             resultats = recherche.chercher(region, texte, ref)
-        } finally {
-            enCours = false
-        }
-    }
-    LaunchedEffect(categorie, region?.recherche?.absolutePath) {
-        val code = categorie
-        if (code == null || ref == null) {
-            parCategorie = null
-            return@LaunchedEffect
-        }
-        enCours = true
-        try {
-            parCategorie = recherche.parCategorie(region, code, ref)
         } finally {
             enCours = false
         }
@@ -131,7 +119,7 @@ fun RechercheEcran(
                 texte = texte,
                 onTexte = {
                     texte = it
-                    if (it.isNotBlank()) categorie = null
+                    if (it.isNotBlank() && categorie != null) onCategorie(null, "")
                 },
                 onValider = { clavier?.hide() },
                 focus = focus,
@@ -146,11 +134,14 @@ fun RechercheEcran(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CATEGORIES_RAPIDES.forEach { (code, libelle) ->
-                PuceCategorie(libelle, choisie = categorie == code) {
-                    categorie = if (categorie == code) null else code
-                    if (categorie != null) {
+                // Une catégorie s'affiche directement sur la carte (maquette « 4 · Catégorie sur la carte »).
+                PuceCategorie(libelle, choisie = categorie?.code == code) {
+                    if (categorie?.code == code) {
+                        onCategorie(null, libelle)
+                    } else {
                         texte = ""
                         clavier?.hide()
+                        onCategorie(code, libelle)
                     }
                 }
             }
@@ -170,16 +161,8 @@ fun RechercheEcran(
                     "Téléchargez la recherche de ${region.nom} pour trouver adresses et lieux sans réseau.",
                     onOuvrirRegions,
                 )
-                categorie != null -> {
-                    val liste = parCategorie
-                    val libelle = CATEGORIES_RAPIDES.first { it.first == categorie }.second
-                    Section("$libelle à proximité") {
-                        when {
-                            liste == null -> Chargement()
-                            liste.isEmpty() -> Vide("Aucun résultat dans cette région.")
-                            else -> Lignes(liste, ref, texte = "", onChoisir)
-                        }
-                    }
+                categorie != null && texte.isBlank() -> {
+                    Section("${categorie.libelle} à proximité") { Lignes(categorie.lieux, ref, texte = "", onChoisir) }
                 }
                 texte.isNotBlank() -> {
                     val r = resultats
@@ -286,7 +269,8 @@ private fun Section(titre: String, contenu: @Composable () -> Unit) {
 
 @Composable
 private fun Lignes(lieux: List<Lieu>, ref: Reference?, texte: String, onChoisir: (Lieu) -> Unit) {
-    val jetons = Normalisation.jetons(Normalisation.normaliser(texte))
+    val normalise = Normalisation.normaliser(texte)
+    val jetons = (Normalisation.jetons(normalise) + Normalisation.mots(normalise)).distinct()
     lieux.forEachIndexed { i, lieu ->
         if (i > 0) Separateur()
         val etat = if (lieu.type == TypeLieu.LIEU) Horaires.lire(lieu.horaires)?.etat() else null

@@ -2,7 +2,19 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
-## [Non publié]
+## [0.2.1-pre1] - 2026-10-30
+
+### Ajouté
+
+- Catégories sur la carte : toucher « Boulangerie » (ou une autre catégorie) place un point par résultat. Une bande en bas montre le lieu mis en avant (distance, ouvert ou fermé, Itinéraire, Fiche) ; les flèches ou un appui sur un point passent à un autre ; « Liste » ramène la liste.
+- Fiche sans horaires : « Horaires non renseignés » et lien « Les ajouter sur OpenStreetMap ».
+
+### Corrigé
+
+- Recherche d'adresse : le numéro est aussi accepté après la rue (« place bellecour 20 »).
+- Abréviations pendant la frappe : « avenue du pl » trouve de nouveau « avenue du Plateau » (le mot en cours n'est plus remplacé par « place »).
+
+## [0.2.0-pre1] - 2026-10-29
 
 ### Ajouté
 

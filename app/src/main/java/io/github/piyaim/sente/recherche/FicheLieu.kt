@@ -174,6 +174,21 @@ fun FicheLieu(
                     }
                 } else if (lieu.horaires != null) {
                     Detail(Icones.Horloge) { Text(lieu.horaires, style = MaterialTheme.typography.bodyLarge) }
+                } else if (lieu.type == TypeLieu.LIEU && lieu.osm != null) {
+                    // Pas d'horaires dans OpenStreetMap : n'importe qui peut les ajouter, pour tout le monde.
+                    Detail(Icones.Horloge) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("Horaires non renseignés", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "Les ajouter sur OpenStreetMap",
+                                modifier = Modifier
+                                    .clickable(role = Role.Button) { ouvrir(context, Intent(Intent.ACTION_VIEW, Uri.parse(lienEdition(lieu.osm)))) }
+                                    .padding(vertical = 6.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
                 lieu.telephone?.let { Detail(Icones.Telephone) { Text(it, style = MaterialTheme.typography.bodyLarge) } }
                 accesFauteuil(lieu.fauteuil)?.let { Detail(Icones.Fauteuil) { Text(it, style = MaterialTheme.typography.bodyLarge) } }
@@ -214,6 +229,9 @@ private fun accesFauteuil(valeur: String?): String? = when (valeur) {
     "no" -> "Pas d'accès en fauteuil roulant"
     else -> null
 }
+
+/** Éditeur d'openstreetmap.org ouvert sur l'objet (« node/123 » → « …/edit?node=123 »). Un compte OSM gratuit est demandé. */
+private fun lienEdition(osm: String): String = "https://www.openstreetmap.org/edit?" + osm.replaceFirst('/', '=')
 
 private fun adresseWeb(site: String): String = if (site.startsWith("http://") || site.startsWith("https://")) site else "https://$site"
 

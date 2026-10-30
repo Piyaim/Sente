@@ -33,11 +33,13 @@ import io.github.piyaim.sente.perso.ChoixListe
 import io.github.piyaim.sente.perso.DonneesPerso
 import io.github.piyaim.sente.perso.FavorisEcran
 import io.github.piyaim.sente.perso.Raccourci
+import io.github.piyaim.sente.recherche.CarteCategorie
 import io.github.piyaim.sente.recherche.FicheLieu
 import io.github.piyaim.sente.recherche.GestionRecherche
 import io.github.piyaim.sente.recherche.Lieu
 import io.github.piyaim.sente.recherche.RechercheEcran
 import io.github.piyaim.sente.recherche.Reference
+import io.github.piyaim.sente.recherche.VueCategorie
 import io.github.piyaim.sente.regions.GestionRegions
 import io.github.piyaim.sente.regions.RegionsEcran
 import io.github.piyaim.sente.ui.SenteTheme
@@ -68,6 +70,9 @@ private fun AppSente() {
     var ecran by rememberSaveable { mutableStateOf(Ecran.CARTE) }
     var selectionJson by rememberSaveable { mutableStateOf<String?>(null) }
     val selection = remember(selectionJson) { selectionJson?.let { Lieu.depuisJson(JSONObject(it)) } }
+    // Résultats d'une catégorie affichés sur la carte (« Boulangerie »…), gardés comme la sélection.
+    var categorieJson by rememberSaveable { mutableStateOf<String?>(null) }
+    val categorie = remember(categorieJson) { categorieJson?.let { VueCategorie.depuisJson(it) } }
     var positionAutorisee by remember { mutableStateOf(positionPreciseAccordee(context)) }
     var position by remember { mutableStateOf<Reference?>(null) }
     var centre by remember { mutableStateOf<Reference?>(null) }
@@ -89,7 +94,38 @@ private fun AppSente() {
         versionPerso++
         selectionJson = lieu.versJson().toString()
         ecran = Ecran.CARTE
+        // Ouvert depuis une catégorie : ce lieu devient celui mis en avant quand la fiche se ferme.
+        categorie?.let { vue ->
+            val i = vue.lieux.indexOfFirst { it.cle == lieu.cle }
+            if (i >= 0) categorieJson = vue.copy(index = i).versJson()
+        }
     }
+
+    fun mettreEnAvant(i: Int) {
+        val vue = categorie ?: return
+        categorieJson = vue.copy(index = i.coerceIn(0, vue.lieux.lastIndex)).versJson()
+    }
+
+    fun ouvrirCategorie(code: String?, libelle: String) {
+        if (code == null) {
+            categorieJson = null
+            return
+        }
+        val region = gestion.affichee
+        val ref = reference ?: region?.let { Reference(it.enTete.latCentre, it.enTete.lonCentre) } ?: return
+        portee.launch {
+            val lieux = recherche.parCategorie(region, code, ref).orEmpty()
+            if (lieux.isEmpty()) {
+                afficherMessage("Aucun résultat « $libelle » dans cette région.")
+            } else {
+                categorieJson = VueCategorie(code, libelle, lieux).versJson()
+                selectionJson = null
+                ecran = Ecran.CARTE
+            }
+        }
+    }
+
+    val itinerairePlusTard = { afficherMessage("Le calcul d'itinéraire arrive dans la prochaine version.") }
 
     val demandePosition = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         positionAutorisee = positionPreciseAccordee(context)
@@ -103,8 +139,26 @@ private fun AppSente() {
         if (!positionAutorisee) demander()
     }
 
-    BackHandler(enabled = ecran != Ecran.CARTE || selection != null) {
-        if (ecran != Ecran.CARTE) ecran = Ecran.CARTE else selectionJson = null
+    BackHandler(enabled = ecran != Ecran.CARTE || selection != null || categorie != null) {
+        when {
+            ecran != Ecran.CARTE -> ecran = Ecran.CARTE
+            selection != null -> selectionJson = null
+            else -> categorieJson = null
+        }
+    }
+
+    val bandeauCategorie: (@Composable () -> Unit)? = if (categorie == null) {
+        null
+    } else {
+        @Composable {
+            CarteCategorie(
+                vue = categorie,
+                reference = position,
+                onFiche = { choisir(categorie.choisi) },
+                onItineraire = itinerairePlusTard,
+                onIndex = ::mettreEnAvant,
+            )
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -129,6 +183,17 @@ private fun AppSente() {
             onFavoris = { ecran = Ecran.FAVORIS },
             onPosition = { position = Reference(it.latitude, it.longitude) },
             onCentre = { lat, lon -> centre = Reference(lat, lon) },
+            categorie = categorie,
+            onPointCategorie = { i ->
+                val vue = categorie
+                // Point déjà mis en avant, ou fiche ouverte : on ouvre la fiche de ce point.
+                if (vue != null && i in vue.lieux.indices) {
+                    if (selection != null || i == vue.index) choisir(vue.lieux[i]) else mettreEnAvant(i)
+                }
+            },
+            onListeCategorie = { ecran = Ecran.RECHERCHE },
+            onFermerCategorie = { categorieJson = null },
+            bandeauCategorie = bandeauCategorie,
         )
 
         val lieu = selection
@@ -138,7 +203,7 @@ private fun AppSente() {
                 reference = position,
                 favori = favori,
                 onFermer = { selectionJson = null },
-                onItineraire = { afficherMessage("Le calcul d'itinéraire arrive dans la prochaine version.") },
+                onItineraire = itinerairePlusTard,
                 onFavori = {
                     if (favori) {
                         perso.retirerFavori(lieu)
@@ -165,6 +230,8 @@ private fun AppSente() {
                     recherche = recherche,
                     reference = reference,
                     historique = historique,
+                    categorie = categorie,
+                    onCategorie = ::ouvrirCategorie,
                     onChoisir = ::choisir,
                     onEffacerHistorique = {
                         perso.effacerHistorique()

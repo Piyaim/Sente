@@ -24,19 +24,46 @@ object Normalisation {
         "qu" to "quai", "pass" to "passage",
     )
 
-    fun jetons(texteNormalise: String): List<String> =
-        texteNormalise.split(' ').filter { it.isNotEmpty() }.map { ABREVIATIONS[it] ?: it }
+    /** Mots tels que tapés, sans développer les abréviations. */
+    fun mots(texteNormalise: String): List<String> = texteNormalise.split(' ').filter { it.isNotEmpty() }
+
+    fun jetons(texteNormalise: String): List<String> = developper(mots(texteNormalise), dernierAussi = true)
+
+    /**
+     * Abréviations développées. Le dernier mot est peut-être en cours de frappe (« pl » de « plateau ») :
+     * [variantes] essaie donc la requête avec et sans le développer.
+     */
+    private fun developper(mots: List<String>, dernierAussi: Boolean): List<String> =
+        mots.mapIndexed { i, m -> if (i < mots.lastIndex || dernierAussi) ABREVIATIONS[m] ?: m else m }
+
+    /** Une ou deux listes de jetons à essayer pour ce texte (voir [developper]). */
+    fun variantes(texteNormalise: String): List<List<String>> {
+        val m = mots(texteNormalise)
+        return listOf(developper(m, dernierAussi = true), developper(m, dernierAussi = false)).distinct()
+    }
 
     /** Requête FTS : chaque mot en préfixe (« merc » trouve « mercière »), tous obligatoires. */
     fun requeteFts(jetons: List<String>): String? =
         jetons.takeIf { it.isNotEmpty() }?.joinToString(" ") { "$it*" }
 
-    private val NUMERO = Regex("^(\\d{1,5})\\s?(bis|ter|quater|quinquies|[a-z])?\\s+(.+)$")
+    private val NUMERO_DEBUT = Regex("^(\\d{1,5})\\s?(bis|ter|quater|quinquies|[a-z])?\\s+(.+)$")
+    private val NUMERO_FIN = Regex("^(.+?)\\s+(\\d{1,4})\\s?(bis|ter|quater|quinquies|[a-z])?$")
 
-    /** « 12 bis rue merc » → (« 12bis », « rue merc ») ; sans numéro en tête → null. */
+    /**
+     * « 12 bis rue merc » ou « rue merc 12 bis » → (« 12bis », « rue merc ») ; sans numéro → null.
+     * En fin de texte, 5 chiffres sont un code postal, pas un numéro.
+     */
     fun separerNumero(texteNormalise: String): Pair<String, String>? {
-        val m = NUMERO.matchEntire(texteNormalise) ?: return null
-        val (num, rep, reste) = m.destructured
-        return (num.trimStart('0').ifEmpty { "0" } + rep) to reste
+        NUMERO_DEBUT.matchEntire(texteNormalise)?.let { m ->
+            val (num, rep, reste) = m.destructured
+            return numero(num, rep) to reste
+        }
+        NUMERO_FIN.matchEntire(texteNormalise)?.let { m ->
+            val (reste, num, rep) = m.destructured
+            return numero(num, rep) to reste
+        }
+        return null
     }
+
+    private fun numero(num: String, rep: String) = num.trimStart('0').ifEmpty { "0" } + rep
 }
