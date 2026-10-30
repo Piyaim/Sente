@@ -52,4 +52,18 @@ object Icones {
     val Itineraire = trait("itineraire", 2.2f, "M5,19 L5,13 C5,10 7,9 10,9 L18,9", "M14,5 L18,9 L14,13")
     val Supprimer = trait("supprimer", 2f, "M4,7 H20", "M9,7 V4 H15 V7", "M6,7 L7,20 H17 L18,7")
     val Valide = trait("valide", 2.2f, "M5,12.5 L10,17.5 L19,7")
+    val Lecture = trait("lecture", 2.2f, "M7,4.5 L19,12 L7,19.5 Z")
+    val HautParleur = trait("haut-parleur", 2.2f, "M4,9.5 H8 L13,5 V19 L8,14.5 H4 Z", "M16.5,9 C17.8,10.4 17.8,13.6 16.5,15", "M19,6.5 C21.4,9.2 21.4,14.8 19,17.5")
+    val Muet = trait("muet", 2.2f, "M4,9.5 H8 L13,5 V19 L8,14.5 H4 Z", "M16.5,9.5 L21,14", "M21,9.5 L16.5,14")
+    val Navigation = trait("navigation", 2.2f, "M12,3 L19,20 L12,16 L5,20 Z")
+
+    // Manœuvres du guidage (grille 24).
+    val VersDroite = trait("droite", 2.6f, "M7,21 V12 C7,9.5 8.5,8 11,8 H19", "M15,4 L19,8 L15,12")
+    val VersGauche = trait("gauche", 2.6f, "M17,21 V12 C17,9.5 15.5,8 13,8 H5", "M9,4 L5,8 L9,12")
+    val LegerDroite = trait("leger-droite", 2.6f, "M8,21 V14 C8,12 9,10.5 10.5,9 L17,3.5", "M11.5,3 H17.5 V9")
+    val LegerGauche = trait("leger-gauche", 2.6f, "M16,21 V14 C16,12 15,10.5 13.5,9 L7,3.5", "M12.5,3 H6.5 V9")
+    val ToutDroit = trait("tout-droit", 2.6f, "M12,21 V4", "M7,9 L12,4 L17,9")
+    val DemiTour = trait("demi-tour", 2.6f, "M8,21 V9 A4,4 0 0 1 16,9 V15", "M12.5,11.5 L16,15 L19.5,11.5")
+    val RondPoint = trait("rond-point", 2.6f, cercle(12f, 9f, 4.5f), "M12,21 V13.5", "M15.2,5.8 L18.5,2.5", "M14.5,2.5 H18.5 V6.5")
+    val Arrivee = trait("arrivee", 2.6f, "M6,21 V4", "M6,4 H17 L14.5,8 L17,12 H6")
 }

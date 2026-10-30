@@ -2,14 +2,16 @@
 
 Ce document dit **exactement** ce que Sente envoie, à qui, et pourquoi. Il distingue ce qui existe **aujourd'hui** de ce qui est **prévu**. Il est mis à jour à chaque version qui change un échange réseau ou une permission.
 
-## Version actuelle (préversions 0.3.x : carte, recherche, favoris et essai d'itinéraire hors ligne)
+## Version actuelle (préversions 0.3.x : carte, recherche, favoris, itinéraire et guidage hors ligne)
 
 ### Permissions Android
 
 | Permission | Pourquoi | Quand |
 | --- | --- | --- |
 | Internet | Télécharger la liste des régions et une région | Uniquement quand vous appuyez sur « Voir les régions disponibles » puis « Télécharger » |
-| Position précise et approximative | Afficher votre position grâce au GPS | Uniquement quand l'appli est à l'écran ; jamais en arrière-plan |
+| Position précise et approximative | Afficher votre position et vous guider grâce au GPS | Quand l'appli est à l'écran ; en arrière-plan **uniquement pendant un guidage**, avec une notification visible |
+| Service de premier plan (position) | Garder le guidage et la voix actifs quand vous passez à une autre appli | Seulement entre « Démarrer » et l'arrivée ou « Arrêter » |
+| Notifications | Afficher « Guidage en cours » et un bouton Arrêter pendant un guidage | Demandée au premier guidage ; un refus n'empêche pas de guider |
 | État du réseau | Exigée par la bibliothèque de carte MapLibre pour savoir si le réseau est disponible | Ne transmet rien |
 | Permission interne AndroidX | Réservée à l'appli elle-même | Ne donne accès à rien |
 
@@ -41,8 +43,19 @@ Ce que fait ensuite cette autre appli ne dépend plus de Sente.
 ### Position
 
 - Obtenue par le GPS via le `LocationManager` d'Android ; jamais par le Fused Location Provider de Google.
-- Ni enregistrée, ni envoyée : elle sert uniquement à placer le point sur la carte et de point de départ au calcul d'itinéraire, fait sur le téléphone.
+- Ni enregistrée, ni envoyée : elle sert uniquement à placer le point sur la carte, de point de départ au calcul d'itinéraire et au guidage, faits sur le téléphone. Aucun historique de trajets n'est gardé.
+- Pendant un guidage, elle est lue directement auprès du GPS, y compris quand Sente n'est plus à l'écran. Le guidage (Ferrostar) ne reçoit que ces positions GPS : le fournisseur « fused » d'Android, qui passe par Google sur la plupart des téléphones, n'est pas utilisé.
+- Les autres applis ne peuvent pas lire la position de Sente. La notification de guidage reste neutre : « Guidage en cours », sans rue, destination, heure d'arrivée ni coordonnées.
+- **Hors de Sente** : sur un téléphone avec les services Google (ou ceux du fabricant), le système peut collecter la position de son côté si vous l'avez autorisé (« Précision de la localisation », historique des positions). Ces réglages sont dans Paramètres → Localisation ; le GPS seul suffit à Sente.
 - Option « Première position plus rapide », **désactivée par défaut** : elle ajoute le fournisseur « réseau » d'Android. Sur un téléphone avec les services Google, c'est le système (pas Sente) qui envoie alors à Google les réseaux Wi-Fi et antennes environnants.
+
+### Voix du guidage
+
+Sente transmet le texte des consignes (par exemple « Tournez à droite dans le cours Jean-Jaurès ») au moteur de synthèse vocale choisi dans les réglages d'Android. Ce moteur est une application séparée, avec sa propre politique : celui de Google peut, selon ses réglages, utiliser des voix en ligne et recevoir ce texte. SherpaTTS, moteur libre, fonctionne entièrement hors ligne après avoir téléchargé sa voix une fois. Le bouton haut-parleur coupe la voix.
+
+### Écran verrouillé
+
+La notification de guidage est masquée sur l'écran verrouillé. Même déverrouillée, elle ne dit rien du trajet : c'est voulu, car les applis qui ont l'accès aux notifications (celle d'une montre connectée, par exemple) peuvent lire leur texte.
 
 ### Données enregistrées sur le téléphone
 
@@ -76,7 +89,6 @@ L'utilisateur saisit l'adresse de **son** serveur. Sente ne contacte que cette a
 
 ### Services tiers installés à part
 
-- **Synthèse vocale** : Sente utilise le moteur de synthèse vocale choisi dans les réglages d'Android. Ce moteur est une application séparée, avec sa propre politique. SherpaTTS, moteur libre conseillé, télécharge une fois sa voix depuis Hugging Face puis fonctionne hors ligne.
 - **Android Auto (lot 7)** : Android Auto est une application Google. Son utilisation passe par un interrupteur désactivé par défaut.
 
 ## Contrôles et réclamations

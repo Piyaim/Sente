@@ -10,17 +10,28 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import uniffi.ferrostar.Route
+import uniffi.ferrostar.createRouteFromOsrm
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 
-/** Un trajet calculé : tracé, durée, distance, et le temps qu'a pris le calcul (mesure de l'essai 3a). */
-data class Trajet(
-    val arrivee: Lieu,
+/** Préférences de trajet choisies dans l'aperçu (maquette « 6 · Aperçu du trajet »). */
+data class OptionsTrajet(val eviterPeages: Boolean = false, val eviterAutoroutes: Boolean = false)
+
+/**
+ * Un trajet proposé : la route au format de Ferrostar (pour le guidage), plus ce que l'aperçu affiche.
+ * [sansPeage] marque la variante calculée en évitant les péages.
+ */
+data class Proposition(
+    val route: Route,
     val points: List<Reference>,
     val dureeSecondes: Double,
-    val distanceKm: Double,
-    val calculMs: Long,
+    val distanceMetres: Double,
+    val peages: Boolean,
+    val autoroute: Boolean,
+    val resume: String,
+    val sansPeage: Boolean = false,
 )
 
 /**
@@ -35,23 +46,70 @@ class MoteurItineraire(private val context: Context) {
     private var moteur: Valhalla? = null
     private var cleMoteur: String? = null
 
-    suspend fun calculer(tuiles: File, depart: Reference, arrivee: Lieu): Result<Trajet> = withContext(filUnique) {
-        try {
-            val debut = System.nanoTime()
-            val reponse = ouvrir(tuiles).routeRaw(requete(depart, arrivee))
-            val calculMs = (System.nanoTime() - debut) / 1_000_000
-            Result.success(lireTrajet(JSONObject(reponse), arrivee, calculMs))
-        } catch (e: ValhallaException.Internal) {
-            Result.failure(IOException(messageErreur(e.message)))
-        } catch (e: Exception) {
-            Result.failure(IOException("Calcul impossible : ${e.message ?: e.javaClass.simpleName}"))
+    /**
+     * Trajet principal et, s'il passe par des péages, une variante sans péage.
+     * Les consignes (affichées et vocales) sont en français.
+     */
+    suspend fun propositions(tuiles: File, depart: Reference, arrivee: Reference, options: OptionsTrajet): Result<List<Proposition>> =
+        withContext(filUnique) {
+            try {
+                val principale = calculer(tuiles, depart, arrivee, options)
+                val liste = mutableListOf(principale)
+                if (principale.peages && !options.eviterPeages) {
+                    runCatching { calculer(tuiles, depart, arrivee, options.copy(eviterPeages = true)) }.getOrNull()
+                        ?.takeIf { !it.peages }
+                        ?.let { liste += it.copy(sansPeage = true) }
+                }
+                Result.success(liste)
+            } catch (e: ValhallaException.Internal) {
+                Result.failure(IOException(messageErreur(e.message)))
+            } catch (e: Exception) {
+                Result.failure(IOException("Calcul impossible : ${e.message ?: e.javaClass.simpleName}"))
+            }
         }
-    }
+
+    /** Un seul trajet (recalcul pendant le guidage). */
+    suspend fun route(tuiles: File, depart: Reference, arrivee: Reference, options: OptionsTrajet): Route =
+        withContext(filUnique) { calculer(tuiles, depart, arrivee, options).route }
 
     suspend fun fermer() = withContext(filUnique) {
         moteur?.close()
         moteur = null
         cleMoteur = null
+    }
+
+    private fun calculer(tuiles: File, depart: Reference, arrivee: Reference, options: OptionsTrajet): Proposition {
+        val reponse = JSONObject(ouvrir(tuiles).routeRaw(requete(depart, arrivee, options)))
+        val trajet = reponse.getJSONArray("routes").getJSONObject(0)
+        val route = createRouteFromOsrm(
+            trajet.toString().toByteArray(),
+            reponse.getJSONArray("waypoints").toString().toByteArray(),
+            6u,
+        )
+        val classes = mutableSetOf<String>()
+        val resumes = mutableListOf<String>()
+        val etapes = trajet.getJSONArray("legs")
+        for (i in 0 until etapes.length()) {
+            val etape = etapes.getJSONObject(i)
+            etape.optString("summary").takeIf { it.isNotBlank() }?.let { resumes += it }
+            val pas = etape.getJSONArray("steps")
+            for (j in 0 until pas.length()) {
+                val intersections = pas.getJSONObject(j).optJSONArray("intersections") ?: continue
+                for (k in 0 until intersections.length()) {
+                    val c = intersections.getJSONObject(k).optJSONArray("classes") ?: continue
+                    for (n in 0 until c.length()) classes += c.getString(n)
+                }
+            }
+        }
+        return Proposition(
+            route = route,
+            points = route.geometry.map { Reference(it.lat, it.lng) },
+            dureeSecondes = trajet.getDouble("duration"),
+            distanceMetres = trajet.getDouble("distance"),
+            peages = "toll" in classes,
+            autoroute = "motorway" in classes,
+            resume = resumes.joinToString(", "),
+        )
     }
 
     /** Le moteur est long à préparer : on le garde tant que le fichier de tuiles ne change pas. */
@@ -85,7 +143,11 @@ class MoteurItineraire(private val context: Context) {
         return config.toString()
     }
 
-    private fun requete(depart: Reference, arrivee: Lieu): String = JSONObject()
+    /**
+     * Requête au format OSRM, avec les consignes affichées (« banner ») et vocales en français :
+     * c'est ce que Ferrostar sait lire pour guider.
+     */
+    private fun requete(depart: Reference, arrivee: Reference, options: OptionsTrajet): String = JSONObject()
         .put(
             "locations",
             JSONArray()
@@ -93,24 +155,21 @@ class MoteurItineraire(private val context: Context) {
                 .put(JSONObject().put("lat", arrivee.lat).put("lon", arrivee.lon).put("type", "break")),
         )
         .put("costing", "auto")
+        .put(
+            "costing_options",
+            JSONObject().put(
+                "auto",
+                JSONObject()
+                    .put("use_tolls", if (options.eviterPeages) 0.0 else 0.5)
+                    .put("use_highways", if (options.eviterAutoroutes) 0.0 else 1.0),
+            ),
+        )
         .put("units", "kilometers")
         .put("language", "fr-FR")
+        .put("format", "osrm")
+        .put("banner_instructions", true)
+        .put("voice_instructions", true)
         .toString()
-
-    private fun lireTrajet(reponse: JSONObject, arrivee: Lieu, calculMs: Long): Trajet {
-        val voyage = reponse.getJSONObject("trip")
-        val resume = voyage.getJSONObject("summary")
-        val etapes = voyage.getJSONArray("legs")
-        val points = ArrayList<Reference>()
-        for (i in 0 until etapes.length()) points += decoderPolyligne6(etapes.getJSONObject(i).getString("shape"))
-        return Trajet(
-            arrivee = arrivee,
-            points = points,
-            dureeSecondes = resume.getDouble("time"),
-            distanceKm = resume.getDouble("length"),
-            calculMs = calculMs,
-        )
-    }
 
     companion object {
         private const val CONFIG_PAR_DEFAUT = "/com/valhalla/valhalla/default.json"
@@ -144,26 +203,5 @@ class MoteurItineraire(private val context: Context) {
     }
 }
 
-/** Décode une polyligne encodée avec 6 décimales (format des tracés Valhalla). */
-fun decoderPolyligne6(code: String): List<Reference> {
-    val points = ArrayList<Reference>()
-    var i = 0
-    var lat = 0L
-    var lon = 0L
-    while (i < code.length) {
-        for (axe in 0..1) {
-            var resultat = 0L
-            var decalage = 0
-            var b: Int
-            do {
-                b = code[i++].code - 63
-                resultat = resultat or ((b and 0x1f).toLong() shl decalage)
-                decalage += 5
-            } while (b >= 0x20)
-            val delta = if ((resultat and 1L) != 0L) (resultat shr 1).inv() else resultat shr 1
-            if (axe == 0) lat += delta else lon += delta
-        }
-        points += Reference(lat / 1e6, lon / 1e6)
-    }
-    return points
-}
+/** Point d'arrivée d'un lieu, pour le calcul. */
+fun Lieu.reference(): Reference = Reference(lat, lon)

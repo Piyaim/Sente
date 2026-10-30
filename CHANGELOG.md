@@ -2,6 +2,27 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
+## [0.3.1-pre1] - 2026-10-30
+
+### Ajouté
+
+- Aperçu du trajet : trajet proposé et variante sans péage, étiquettes « Péages » et routes empruntées, options « Éviter les péages » et « Éviter les autoroutes », bouton Démarrer.
+- Guidage pas à pas : bandeau de la prochaine manœuvre et de la suivante, distance, heure d'arrivée, vitesse, carte qui suit la voiture, bouton Recentrer.
+- Voix en français (moteur de synthèse vocale d'Android), bouton pour la couper ; la musique baisse pendant les annonces.
+- Recalcul automatique en cas d'écart, sur le téléphone.
+- Le guidage continue quand Sente n'est plus à l'écran, avec une notification neutre (« Guidage en cours », bouton Arrêter), masquée sur l'écran verrouillé. L'écran reste allumé pendant le guidage ; fermer Sente depuis les applis récentes arrête le guidage.
+- Écran d'arrivée, avec ajout aux favoris.
+- Essai : « simuler le trajet », pour tester le guidage sans rouler.
+
+### Modifié
+
+- La bande provisoire de l'essai 3a est remplacée par l'aperçu du trajet.
+
+### Technique
+
+- Ajout du cœur de Ferrostar 0.59.0 (BSD-3) ; ses positions viennent uniquement du GPS par le LocationManager.
+- Nouvelles permissions : service de premier plan (position) et notifications.
+
 ## [0.3.0-pre1] - 2026-10-30
 
 ### Ajouté

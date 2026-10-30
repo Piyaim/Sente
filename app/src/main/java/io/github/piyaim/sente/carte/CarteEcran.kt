@@ -51,10 +51,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.piyaim.sente.itineraire.Trajet
 import io.github.piyaim.sente.perso.Raccourci
 import io.github.piyaim.sente.position.SourcePosition
 import io.github.piyaim.sente.recherche.Lieu
+import io.github.piyaim.sente.recherche.Reference
 import io.github.piyaim.sente.recherche.VueCategorie
 import io.github.piyaim.sente.regions.RegionInstallee
 import io.github.piyaim.sente.ui.BoutonIcone
@@ -66,6 +66,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
+import org.maplibre.android.location.OnCameraTrackingChangedListener
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
@@ -84,11 +85,21 @@ import kotlin.math.max
 private const val ZOOM_REGION = 7.5
 private const val ZOOM_POSITION = 15.0
 private const val ZOOM_LIEU = 16.0
+private const val ZOOM_GUIDAGE = 17.0
 private const val SOURCE_SELECTION = "sente-selection"
 private const val SOURCE_CATEGORIE = "sente-categorie"
 private const val SOURCE_TRAJET = "sente-trajet"
+private const val SOURCE_VARIANTE = "sente-variante"
 private val MARGE_BAS_CATEGORIE = 300.dp // bande du bas et bouton de position
 private val MARGE_HAUT_CATEGORIE = 190.dp // barre de catégorie et bouton « Liste »
+
+/** Trajet dessiné sur la carte : en aperçu (tout le tracé visible) ou en guidage (la carte suit la voiture). */
+data class AffichageTrajet(
+    val trace: List<Reference>,
+    val variante: List<Reference>?,
+    val arrivee: Lieu,
+    val guidage: Boolean,
+)
 
 @Composable
 fun CarteEcran(
@@ -108,7 +119,10 @@ fun CarteEcran(
     onPointCategorie: (Int) -> Unit = {},
     onListeCategorie: () -> Unit = {},
     onFermerCategorie: () -> Unit = {},
-    trajet: Trajet? = null,
+    trajet: AffichageTrajet? = null,
+    positionGuidage: Location? = null,
+    recentrage: Int = 0,
+    onSuivi: (Boolean) -> Unit = {},
     bandeauBas: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -116,6 +130,7 @@ fun CarteEcran(
     val surPosition by rememberUpdatedState(onPosition)
     val surCentre by rememberUpdatedState(onCentre)
     val surPointCategorie by rememberUpdatedState(onPointCategorie)
+    val surSuivi by rememberUpdatedState(onSuivi)
     val toleranceTouche = with(LocalDensity.current) { 24.dp.toPx() }
 
     val vueCarte = remember {
@@ -219,6 +234,8 @@ fun CarteEcran(
         val m = carte ?: return@LaunchedEffect
         val p = position ?: return@LaunchedEffect
         if (!composantActif) return@LaunchedEffect
+        // Pendant le guidage, le point suit la position recalée sur la route (ci-dessous), pas le GPS brut.
+        if (trajet?.guidage == true) return@LaunchedEffect
         m.locationComponent.forceLocationUpdate(p)
         if (!dejaCentreSurPosition && selection == null) {
             suivrePosition(m)
@@ -232,34 +249,41 @@ fun CarteEcran(
     val margeBande = with(densite) { MARGE_BAS_CATEGORIE.toPx() }
     val margeHaut = with(densite) { MARGE_HAUT_CATEGORIE.toPx() }
     val margeCote = with(densite) { 48.dp.toPx() }
+    val margeHautApercu = with(densite) { 150.dp.toPx() }
     val couleurPoints = MaterialTheme.colorScheme.primary.toArgb()
     val couleurTrajet = MaterialTheme.colorScheme.primary.toArgb()
-    LaunchedEffect(style, selection, categorie, trajet) {
+    val couleurVariante = MaterialTheme.colorScheme.outline.toArgb()
+    val trace = trajet?.trace
+    val variante = trajet?.variante
+    val guidage = trajet?.guidage == true
+    LaunchedEffect(style, selection, categorie, trace, variante, trajet?.arrivee) {
         val s = style ?: return@LaunchedEffect
-        // Ordre d'empilement : tracé, puis points de catégorie, puis repère doré au-dessus.
-        majTrace(s, trajet, couleurTrajet)
+        // Ordre d'empilement : variante grise, tracé, puis points de catégorie, puis repère doré au-dessus.
+        majLigne(s, SOURCE_VARIANTE, variante, couleurVariante)
+        majLigne(s, SOURCE_TRAJET, trace, couleurTrajet)
         majPointsCategorie(s, if (trajet == null) categorie?.lieux.orEmpty() else emptyList(), couleurPoints)
         majRepere(s, selection ?: trajet?.arrivee ?: categorie?.choisi)
     }
     var listeCadree by remember { mutableStateOf<List<Lieu>?>(null) }
-    LaunchedEffect(carte, selection, categorie, trajet) {
+    LaunchedEffect(carte, selection, categorie, trace, variante, guidage) {
         val m = carte ?: return@LaunchedEffect
         val vue = categorie
-        if (selection != null || vue != null || trajet != null) {
-            if (composantActif) m.locationComponent.setCameraMode(CameraMode.NONE)
+        if (selection != null || vue != null || trace != null) {
+            if (composantActif && !guidage) m.locationComponent.setCameraMode(CameraMode.NONE)
             dejaCentreSurPosition = true
         }
         when {
             selection != null -> versLieu(m, selection, margeFiche)
-            trajet != null -> {
-                // Tout le tracé à l'écran, au-dessus de la bande du bas.
+            guidage -> Unit // caméra gérée par le suivi du guidage, ci-dessous
+            trace != null -> {
+                // Aperçu : tout le tracé (et la variante) entre la carte du haut et le panneau du bas.
                 val bornes = runCatching {
-                    LatLngBounds.Builder().includes(trajet.points.map { LatLng(it.lat, it.lon) }).build()
+                    LatLngBounds.Builder().includes((trace + variante.orEmpty()).map { LatLng(it.lat, it.lon) }).build()
                 }.getOrNull()
                 if (bornes != null) {
                     m.animateCamera(
                         CameraUpdateFactory.newLatLngBounds(
-                            bornes, margeCote.toInt(), margeCote.toInt() * 2, margeCote.toInt(), margeBande.toInt(),
+                            bornes, margeCote.toInt(), margeHautApercu.toInt(), margeCote.toInt(), margeFiche.toInt(),
                         ),
                         600,
                     )
@@ -289,6 +313,46 @@ fun CarteEcran(
                 listeCadree = null
                 m.animateCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0), 300)
             }
+        }
+    }
+
+    // Guidage : la carte suit la voiture, dans le sens de la marche, point placé dans le bas de l'écran.
+    val margeGuidage = with(densite) { (LocalConfiguration.current.screenHeightDp * 0.42f).dp.toPx() }.toDouble()
+    var etaitEnGuidage by remember { mutableStateOf(false) }
+    LaunchedEffect(carte, composantActif, guidage, recentrage) {
+        val m = carte ?: return@LaunchedEffect
+        if (!composantActif) return@LaunchedEffect
+        val composant = m.locationComponent
+        if (guidage) {
+            etaitEnGuidage = true
+            m.moveCamera(CameraUpdateFactory.paddingTo(0.0, margeGuidage, 0.0, 0.0))
+            composant.renderMode = RenderMode.GPS
+            composant.setCameraMode(CameraMode.TRACKING_GPS, 750L, ZOOM_GUIDAGE, null, 45.0, null)
+            surSuivi(true)
+        } else if (etaitEnGuidage) {
+            etaitEnGuidage = false
+            composant.setCameraMode(CameraMode.NONE)
+            composant.renderMode = RenderMode.COMPASS
+            m.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(m.cameraPosition).tilt(0.0).bearing(0.0).padding(0.0, 0.0, 0.0, 0.0).build()), 500)
+        }
+    }
+    LaunchedEffect(positionGuidage, composantActif) {
+        val m = carte ?: return@LaunchedEffect
+        val p = positionGuidage ?: return@LaunchedEffect
+        if (composantActif) m.locationComponent.forceLocationUpdate(p)
+    }
+    // Un geste sur la carte interrompt le suivi : le guidage affiche alors « Recentrer ».
+    DisposableEffect(carte, composantActif) {
+        val m = carte
+        if (m == null || !composantActif) {
+            onDispose { }
+        } else {
+            val ecoute = object : OnCameraTrackingChangedListener {
+                override fun onCameraTrackingDismissed() = surSuivi(false)
+                override fun onCameraTrackingChanged(currentMode: Int) = Unit
+            }
+            m.locationComponent.addOnCameraTrackingChangedListener(ecoute)
+            onDispose { m.locationComponent.removeOnCameraTrackingChangedListener(ecoute) }
         }
     }
 
@@ -345,14 +409,15 @@ fun CarteEcran(
             val modeCategorie = selection == null && trajet == null && categorie != null
 
             if (modeTrajet) {
-                Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                        if (region != null) attribution(Modifier)
-                        Spacer(Modifier.weight(1f))
-                        BoutonIcone(Icones.Viseur, "Centrer sur ma position", centrer, rayon = 20.dp)
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    bandeauBas?.invoke()
+                // Aperçu et guidage dessinent leurs propres commandes ; seule la mention des sources reste ici.
+                if (region != null) {
+                    attribution(
+                        if (guidage) {
+                            Modifier.align(Alignment.BottomStart).padding(bottom = 214.dp)
+                        } else {
+                            Modifier.align(Alignment.TopEnd).padding(top = 92.dp)
+                        },
+                    )
                 }
             } else if (modeCategorie && categorie != null) {
                 Column(
@@ -520,10 +585,10 @@ private fun versLieu(carte: MapLibreMap, lieu: Lieu, margeBas: Double) {
     )
 }
 
-/** Tracé du trajet : trait vert bordé de blanc, sous les points et le repère. */
-private fun majTrace(style: Style, trajet: Trajet?, couleur: Int) {
+/** Une ligne de trajet (tracé ou variante) bordée de blanc, sous les points et le repère. */
+private fun majLigne(style: Style, id: String, points: List<Reference>?, couleur: Int) {
     val coordonnees = JSONArray()
-    trajet?.points?.forEach { coordonnees.put(JSONArray().put(it.lon).put(it.lat)) }
+    points?.forEach { coordonnees.put(JSONArray().put(it.lon).put(it.lat)) }
     val geojson = if (coordonnees.length() < 2) {
         """{"type":"FeatureCollection","features":[]}"""
     } else {
@@ -533,21 +598,21 @@ private fun majTrace(style: Style, trajet: Trajet?, couleur: Int) {
             .put("geometry", JSONObject().put("type", "LineString").put("coordinates", coordonnees))
             .toString()
     }
-    val source = style.getSourceAs<GeoJsonSource>(SOURCE_TRAJET)
+    val source = style.getSourceAs<GeoJsonSource>(id)
     if (source != null) {
         source.setGeoJson(geojson)
         return
     }
-    style.addSource(GeoJsonSource(SOURCE_TRAJET, geojson))
-    val bord = LineLayer("$SOURCE_TRAJET-bord", SOURCE_TRAJET).withProperties(
+    style.addSource(GeoJsonSource(id, geojson))
+    val bord = LineLayer("$id-bord", id).withProperties(
         PropertyFactory.lineColor("#FFFFFF"),
-        PropertyFactory.lineWidth(10f),
+        PropertyFactory.lineWidth(11f),
         PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
         PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
     )
-    val trait = LineLayer("$SOURCE_TRAJET-trait", SOURCE_TRAJET).withProperties(
+    val trait = LineLayer("$id-trait", id).withProperties(
         PropertyFactory.lineColor(couleur),
-        PropertyFactory.lineWidth(6f),
+        PropertyFactory.lineWidth(7f),
         PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
         PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
     )

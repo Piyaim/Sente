@@ -11,3 +11,8 @@
 -dontwarn javax.annotation.**
 -dontwarn org.jetbrains.annotations.**
 -dontwarn com.google.errorprone.annotations.**
+
+# Ferrostar (guidage) : ses propres règles sont fournies avec la bibliothèque ; on garde en plus
+# les classes qui implémentent les interfaces de JNA, appelées depuis le code natif.
+-keep class * implements com.sun.jna.** { *; }
+-dontwarn java.awt.**

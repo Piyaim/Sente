@@ -7,6 +7,10 @@
     <!-- Position : GPS (précise) ; la position approximative est demandée avec, comme l'exige Android. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Guidage qui continue quand Sente n'est plus à l'écran : service de premier plan, notification visible. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Ajoutée par MapLibre mais inutile à Sente : retirée. -->
     <uses-permission
         android:name="android.permission.ACCESS_WIFI_STATE"
@@ -22,12 +26,19 @@
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Actif seulement pendant un guidage, démarré et arrêté par Sente. -->
+        <service
+            android:name=".guidage.ServiceGuidage"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

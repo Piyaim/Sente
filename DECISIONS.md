@@ -4,6 +4,12 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-10-30 | Guidage en arrière-plan avec service de premier plan et notification (choix B) | Le guidage et la voix continuent quand on ouvre une autre appli ; indispensable aussi pour Android Auto (lot 7) |
+| 2026-10-30 | Notification de guidage neutre (« Guidage en cours »), masquée sur l'écran verrouillé | Son texte est lisible sur l'écran verrouillé et par les applis ayant l'accès aux notifications (montres…) : aucune rue ni destination |
+| 2026-10-30 | Ferrostar reçoit les positions de notre source GPS, pas de sa source Android | Sa source choisit le fournisseur « fused », qui passe par Google sur la plupart des téléphones |
+| 2026-10-30 | Variante proposée : la même route en évitant les péages, plutôt que les « alternatives » de Valhalla | Utile et rapide (0,2 s) ; les alternatives de Valhalla en trouvent rarement sur nos tests |
+| 2026-10-30 | Bouton « simuler le trajet » dans l'aperçu, pendant les préversions | Tester guidage, voix et arrivée sans rouler |
+| 2026-10-30 | Profils à ajouter après le lot 3 : moto, à pied, à vélo | Demandés ; même moteur Valhalla, réglages différents, une fois la voiture validée de bout en bout |
 | 2026-10-30 | Itinéraire : valhalla-mobile 0.6.4 (Valhalla 3.9.1) ; tuiles construites dans Sente-cartes avec la même version | Le format des tuiles change entre versions de Valhalla ; calcul entièrement hors ligne, licence MIT |
 | 2026-10-30 | Guidage (lot 3c) : cœur de Ferrostar, écrans et voix de Sente | Logique de guidage éprouvée, sans remplacer le design validé ; module Google de Ferrostar exclu |
 | 2026-10-30 | Voiture seule au lot 3 ; moto ensuite | Valider d'abord toute la chaîne avec un profil |

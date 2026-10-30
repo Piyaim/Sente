@@ -3,6 +3,7 @@ package io.github.piyaim.sente
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -18,6 +19,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,9 +31,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import io.github.piyaim.sente.carte.CarteEcran
-import io.github.piyaim.sente.itineraire.BandeTrajet
+import io.github.piyaim.sente.carte.AffichageTrajet
+import io.github.piyaim.sente.guidage.ArriveeCarte
+import io.github.piyaim.sente.guidage.EtatGuidage
+import io.github.piyaim.sente.guidage.GestionGuidage
+import io.github.piyaim.sente.guidage.GuidageEcran
+import io.github.piyaim.sente.itineraire.ApercuTrajet
+import io.github.piyaim.sente.itineraire.EtatApercu
 import io.github.piyaim.sente.itineraire.MoteurItineraire
-import io.github.piyaim.sente.itineraire.Trajet
+import io.github.piyaim.sente.itineraire.reference
 import io.github.piyaim.sente.perso.ChoixListe
 import io.github.piyaim.sente.perso.DonneesPerso
 import io.github.piyaim.sente.perso.FavorisEcran
@@ -69,6 +77,7 @@ private fun AppSente() {
     val recherche = remember { GestionRecherche() }
     val perso = remember { DonneesPerso(context.applicationContext) }
     val moteur = remember { MoteurItineraire(context.applicationContext) }
+    val guidage = remember { GestionGuidage(context.applicationContext, moteur) }
     val messages = remember { SnackbarHostState() }
 
     var ecran by rememberSaveable { mutableStateOf(Ecran.CARTE) }
@@ -82,9 +91,13 @@ private fun AppSente() {
     var centre by remember { mutableStateOf<Reference?>(null) }
     var versionPerso by remember { mutableStateOf(0) } // relit favoris et historique après une modification
     var choixListePour by remember { mutableStateOf<Lieu?>(null) }
-    // Essai 3a : trajet calculé sur le téléphone, affiché sur la carte (pas encore de guidage).
-    var trajet by remember { mutableStateOf<Trajet?>(null) }
-    var calculEnCours by remember { mutableStateOf(false) }
+    // Aperçu du trajet avant de démarrer, puis guidage (Ferrostar) et arrivée.
+    var apercu by remember { mutableStateOf<EtatApercu?>(null) }
+    val etatGuidage by guidage.etat.collectAsState()
+    val muet by guidage.muet.collectAsState()
+    var suivi by remember { mutableStateOf(true) }
+    var recentrage by remember { mutableStateOf(0) }
+    var demarrageEnAttente by remember { mutableStateOf<Boolean?>(null) } // true : simulation
 
     val historique = remember(versionPerso) { perso.historique() }
     val listes = remember(versionPerso) { perso.listes() }
@@ -132,33 +145,58 @@ private fun AppSente() {
         }
     }
 
-    fun calculerItineraire(vers: Lieu) {
+    /** Calcule les trajets de l'aperçu ; relancé quand une option change. */
+    fun calculerApercu(etat: EtatApercu) {
         val tuiles = gestion.affichee?.routage
         val depart = position
         when {
             tuiles == null -> afficherMessage("Itinéraire non installé : « Cartes et réglages » → « Ajouter l'itinéraire ».")
             depart == null -> afficherMessage("Position inconnue : attendez le signal GPS pour calculer un trajet.")
-            calculEnCours -> Unit
             else -> {
-                calculEnCours = true
-                afficherMessage("Calcul de l'itinéraire…")
+                apercu = etat.copy(propositions = null, choisie = 0, erreur = null)
+                selectionJson = null
                 portee.launch {
-                    val resultat = moteur.calculer(tuiles, depart, vers)
-                    calculEnCours = false
-                    resultat
-                        .onSuccess {
-                            messages.currentSnackbarData?.dismiss()
-                            trajet = it
-                            selectionJson = null
-                        }
-                        .onFailure { afficherMessage(it.message ?: "Calcul impossible.") }
+                    val resultat = moteur.propositions(tuiles, depart, etat.destination.reference(), etat.options)
+                    // Ignoré si l'aperçu a été fermé ou les options changées entre-temps.
+                    val courant = apercu ?: return@launch
+                    if (courant.destination != etat.destination || courant.options != etat.options) return@launch
+                    apercu = resultat.fold(
+                        onSuccess = { courant.copy(propositions = it, erreur = null) },
+                        onFailure = { courant.copy(propositions = emptyList(), erreur = it.message ?: "Calcul impossible.") },
+                    )
                 }
             }
         }
     }
 
+    fun calculerItineraire(vers: Lieu) = calculerApercu(EtatApercu(vers))
+
+    fun lancerGuidage(simuler: Boolean) {
+        val etat = apercu ?: return
+        val proposition = etat.proposition ?: return
+        val tuiles = gestion.affichee?.routage ?: return
+        suivi = true
+        guidage.demarrer(proposition, etat.destination, tuiles, etat.options, simuler)
+        apercu = null
+    }
+
     val demandePosition = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         positionAutorisee = positionPreciseAccordee(context)
+    }
+    // Notifications (Android 13 et plus) : demandées au premier guidage ; un refus n'empêche pas de guider.
+    val demandeNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        demarrageEnAttente?.let { lancerGuidage(it) }
+        demarrageEnAttente = null
+    }
+    fun demarrer(simuler: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            demarrageEnAttente = simuler
+            demandeNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            lancerGuidage(simuler)
+        }
     }
     val demander = {
         demandePosition.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -169,20 +207,36 @@ private fun AppSente() {
         if (!positionAutorisee) demander()
     }
 
-    BackHandler(enabled = ecran != Ecran.CARTE || selection != null || trajet != null || categorie != null) {
+    val enGuidage = etatGuidage is EtatGuidage.EnCours
+    BackHandler(enabled = ecran != Ecran.CARTE || selection != null || etatGuidage != null || apercu != null || categorie != null) {
         when {
             ecran != Ecran.CARTE -> ecran = Ecran.CARTE
+            // Pendant un trajet, le retour ne coupe pas le guidage par erreur.
+            enGuidage -> afficherMessage("Touchez ✕ pour arrêter le guidage.")
+            etatGuidage != null -> guidage.arreter()
             selection != null -> selectionJson = null
-            trajet != null -> trajet = null
+            apercu != null -> apercu = null
             else -> categorieJson = null
         }
     }
 
-    val trajetAffiche = trajet
+    // Ce que la carte dessine : trajet suivi pendant le guidage, ou trajet choisi et variante dans l'aperçu.
+    val g = etatGuidage
+    val a = apercu
+    val affichageTrajet = when {
+        g is EtatGuidage.EnCours -> AffichageTrajet(g.trace, null, g.destination, guidage = true)
+        g is EtatGuidage.Arrive -> AffichageTrajet(emptyList(), null, g.destination, guidage = false)
+        a != null -> AffichageTrajet(
+            trace = a.proposition?.points.orEmpty(),
+            variante = a.propositions?.filterIndexed { i, _ -> i != a.choisie }?.firstOrNull()?.points,
+            arrivee = a.destination,
+            guidage = false,
+        )
+        else -> null
+    }
+
     // Forme « if / else » : dans un « when », « -> { … } » serait lu comme un bloc et non comme une fonction.
-    val bandeauBas: (@Composable () -> Unit)? = if (trajetAffiche != null) {
-        @Composable { BandeTrajet(trajetAffiche, onFermer = { trajet = null }) }
-    } else if (categorie != null) {
+    val bandeauBas: (@Composable () -> Unit)? = if (categorie != null) {
         @Composable {
             CarteCategorie(
                 vue = categorie,
@@ -228,9 +282,39 @@ private fun AppSente() {
             },
             onListeCategorie = { ecran = Ecran.RECHERCHE },
             onFermerCategorie = { categorieJson = null },
-            trajet = trajet,
+            trajet = affichageTrajet,
+            positionGuidage = (g as? EtatGuidage.EnCours)?.position,
+            recentrage = recentrage,
+            onSuivi = { suivi = it },
             bandeauBas = bandeauBas,
         )
+
+        if (ecran == Ecran.CARTE) {
+            when {
+                g is EtatGuidage.EnCours -> GuidageEcran(
+                    etat = g,
+                    muet = muet,
+                    suivi = suivi,
+                    onRecentrer = { recentrage++ },
+                    onMuet = guidage::couperVoix,
+                    onArreter = { guidage.arreter() },
+                )
+                g is EtatGuidage.Arrive -> ArriveeCarte(
+                    etat = g,
+                    onTerminer = { guidage.arreter() },
+                    onFavori = { choixListePour = g.destination },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+                a != null -> ApercuTrajet(
+                    etat = a,
+                    onOptions = { calculerApercu(a.copy(options = it)) },
+                    onChoisir = { apercu = a.copy(choisie = it) },
+                    onDemarrer = { demarrer(simuler = false) },
+                    onSimuler = { demarrer(simuler = true) },
+                    onRetour = { apercu = null },
+                )
+            }
+        }
 
         val lieu = selection
         if (lieu != null && ecran == Ecran.CARTE) {

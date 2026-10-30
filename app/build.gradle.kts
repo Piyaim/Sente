@@ -53,6 +53,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Exigé par Ferrostar (bibliothèque compilée avec la « désucration » de Java).
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildFeatures {
@@ -82,4 +84,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.maplibre.android)
     implementation(libs.valhalla.mobile)
+    implementation(libs.ferrostar.core)
+    // Liaison Kotlin ↔ moteur natif de Ferrostar ; déclarée ici pour que ses types soient visibles à la compilation.
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

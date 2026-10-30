@@ -10,7 +10,10 @@ version, empreinte, certificat, fichier_permissions = sys.argv[1:5]
 
 LIBELLES = {
     "android.permission.INTERNET": "Internet : téléchargement des cartes, uniquement à votre demande",
-    "android.permission.ACCESS_FINE_LOCATION": "Position précise (GPS), uniquement quand l'appli est à l'écran",
+    "android.permission.ACCESS_FINE_LOCATION": "Position précise (GPS) : quand l'appli est à l'écran, et pendant un guidage",
+    "android.permission.FOREGROUND_SERVICE": "Service de premier plan : garde le guidage actif hors de l'écran, avec une notification visible",
+    "android.permission.FOREGROUND_SERVICE_LOCATION": "Position pendant ce service : uniquement pendant un guidage",
+    "android.permission.POST_NOTIFICATIONS": "Notifications : « Guidage en cours », sans détail du trajet, uniquement pendant un guidage",
     "android.permission.ACCESS_COARSE_LOCATION": "Position approximative : demandée avec la précise, comme l'exige Android",
     "android.permission.ACCESS_NETWORK_STATE": "État du réseau : utilisé par la bibliothèque de carte, ne transmet rien",
 }
