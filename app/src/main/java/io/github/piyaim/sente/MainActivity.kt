@@ -179,9 +179,11 @@ private fun AppSente() {
     }
 
     val trajetAffiche = trajet
-    val bandeauBas: (@Composable () -> Unit)? = when {
-        trajetAffiche != null -> @Composable { BandeTrajet(trajetAffiche, onFermer = { trajet = null }) }
-        categorie != null -> @Composable {
+    // Forme « if / else » : dans un « when », « -> { … } » serait lu comme un bloc et non comme une fonction.
+    val bandeauBas: (@Composable () -> Unit)? = if (trajetAffiche != null) {
+        @Composable { BandeTrajet(trajetAffiche, onFermer = { trajet = null }) }
+    } else if (categorie != null) {
+        @Composable {
             CarteCategorie(
                 vue = categorie,
                 reference = position,
@@ -190,7 +192,8 @@ private fun AppSente() {
                 onIndex = ::mettreEnAvant,
             )
         }
-        else -> null
+    } else {
+        null
     }
 
     Box(Modifier.fillMaxSize()) {
