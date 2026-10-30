@@ -68,6 +68,17 @@ class DonneesPerso(context: Context) : SQLiteOpenHelper(context, "perso.db", nul
         )
     }
 
+    /** Renomme le lieu dans toutes les listes où il est enregistré. */
+    fun renommerFavori(lieu: Lieu, nom: String) {
+        val renomme = lieu.renomme(nom)
+        writableDatabase.update(
+            "favoris",
+            ContentValues().apply { put("donnees", renomme.versJson().toString()) },
+            "cle = ?",
+            arrayOf(lieu.cle),
+        )
+    }
+
     /** Retire le lieu de toutes les listes. */
     fun retirerFavori(lieu: Lieu) {
         writableDatabase.delete("favoris", "cle = ?", arrayOf(lieu.cle))

@@ -73,11 +73,22 @@ class GestionGuidage(context: Context, private val moteur: MoteurItineraire) {
     private val service = GestionService(contexte)
     private val portee = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /** Message si la voix ne peut pas parler (pas de moteur, ou pas de voix française) ; null sinon. */
+    private val _problemeVoix = MutableStateFlow<String?>(null)
+    val problemeVoix: StateFlow<String?> = _problemeVoix.asStateFlow()
+
     private val voix = AndroidTtsObserver(
         contexte,
         statusObserver = object : AndroidTtsStatusListener {
             override fun onTtsInitialized(tts: TextToSpeech?, status: Int) {
-                tts?.setLanguage(Locale.FRANCE)
+                val langue = tts?.setLanguage(Locale.FRANCE)
+                _problemeVoix.value = when {
+                    tts == null || status != TextToSpeech.SUCCESS ->
+                        "Voix indisponible : aucun moteur de synthèse vocale n'a répondu (réglages Android → Synthèse vocale)."
+                    langue == TextToSpeech.LANG_MISSING_DATA || langue == TextToSpeech.LANG_NOT_SUPPORTED ->
+                        "Voix française absente du moteur de synthèse vocale : installez-la dans les réglages Android."
+                    else -> null
+                }
             }
 
             override fun onTtsShutdownAndRelease() = Unit

@@ -2,6 +2,18 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
+## [0.3.2-pre1] - 2026-10-30
+
+### Ajouté
+
+- Guidage en petite fenêtre flottante quand on quitte Sente pendant un trajet (incrustation d'image d'Android) : manœuvre, carte et heure d'arrivée ; un toucher rouvre Sente.
+- Favoris : nom modifiable à l'enregistrement, et bouton « Renommer » dans l'écran Favoris. Le lieu reste reconnu comme favori sous son nouveau nom.
+- Message clair si la voix ne peut pas parler (pas de moteur de synthèse vocale, ou pas de voix française).
+
+### Corrigé
+
+- La voix du guidage restait muette : Sente ne déclarait pas qu'il cherche un moteur de synthèse vocale, comme l'exige Android depuis la version 11.
+
 ## [0.3.1-pre1] - 2026-10-30
 
 ### Ajouté

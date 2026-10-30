@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.app.PictureInPictureParams
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,6 +38,7 @@ import io.github.piyaim.sente.guidage.ArriveeCarte
 import io.github.piyaim.sente.guidage.EtatGuidage
 import io.github.piyaim.sente.guidage.GestionGuidage
 import io.github.piyaim.sente.guidage.GuidageEcran
+import io.github.piyaim.sente.guidage.GuidagePetiteFenetre
 import io.github.piyaim.sente.itineraire.ApercuTrajet
 import io.github.piyaim.sente.itineraire.EtatApercu
 import io.github.piyaim.sente.itineraire.MoteurItineraire
@@ -60,17 +63,44 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
+    // Petite fenêtre flottante (incrustation d'image) : seulement pendant un guidage.
+    private var enPetiteFenetre by mutableStateOf(false)
+    private var guidageActif = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { SenteTheme { AppSente() } }
+        addOnPictureInPictureModeChangedListener { enPetiteFenetre = it.isInPictureInPictureMode }
+        setContent { SenteTheme { AppSente(enPetiteFenetre, ::majPetiteFenetre) } }
+    }
+
+    private fun petiteFenetrePossible() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    private fun parametresPetiteFenetre(actif: Boolean): PictureInPictureParams {
+        val parametres = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16))
+        // Android 12 et plus : la fenêtre s'ouvre seule en quittant Sente, et seulement pendant un guidage.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) parametres.setAutoEnterEnabled(actif)
+        return parametres.build()
+    }
+
+    private fun majPetiteFenetre(actif: Boolean) {
+        guidageActif = actif
+        if (petiteFenetrePossible()) runCatching { setPictureInPictureParams(parametresPetiteFenetre(actif)) }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 8 à 11 : pas d'ouverture automatique, on la déclenche en quittant Sente.
+        if (guidageActif && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && petiteFenetrePossible()) {
+            runCatching { enterPictureInPictureMode(parametresPetiteFenetre(true)) }
+        }
     }
 }
 
 private enum class Ecran { CARTE, RECHERCHE, FAVORIS, REGLAGES }
 
 @Composable
-private fun AppSente() {
+private fun AppSente(enPetiteFenetre: Boolean, onGuidageActif: (Boolean) -> Unit) {
     val context = LocalContext.current
     val portee = rememberCoroutineScope()
     val gestion = remember { GestionRegions(context.applicationContext, portee) }
@@ -95,6 +125,8 @@ private fun AppSente() {
     var apercu by remember { mutableStateOf<EtatApercu?>(null) }
     val etatGuidage by guidage.etat.collectAsState()
     val muet by guidage.muet.collectAsState()
+    val problemeVoix by guidage.problemeVoix.collectAsState()
+    LaunchedEffect(problemeVoix) { problemeVoix?.let { messages.showSnackbar(it) } }
     var suivi by remember { mutableStateOf(true) }
     var recentrage by remember { mutableStateOf(0) }
     var demarrageEnAttente by remember { mutableStateOf<Boolean?>(null) } // true : simulation
@@ -208,6 +240,9 @@ private fun AppSente() {
     }
 
     val enGuidage = etatGuidage is EtatGuidage.EnCours
+    LaunchedEffect(enGuidage) { onGuidageActif(enGuidage) }
+    // La petite fenêtre montre toujours la carte et le guidage, jamais un autre écran.
+    LaunchedEffect(enPetiteFenetre) { if (enPetiteFenetre) ecran = Ecran.CARTE }
     BackHandler(enabled = ecran != Ecran.CARTE || selection != null || etatGuidage != null || apercu != null || categorie != null) {
         when {
             ecran != Ecran.CARTE -> ecran = Ecran.CARTE
@@ -289,7 +324,7 @@ private fun AppSente() {
             bandeauBas = bandeauBas,
         )
 
-        if (ecran == Ecran.CARTE) {
+        if (ecran == Ecran.CARTE && !enPetiteFenetre) {
             when {
                 g is EtatGuidage.EnCours -> GuidageEcran(
                     etat = g,
@@ -317,7 +352,7 @@ private fun AppSente() {
         }
 
         val lieu = selection
-        if (lieu != null && ecran == Ecran.CARTE) {
+        if (lieu != null && ecran == Ecran.CARTE && !enPetiteFenetre) {
             FicheLieu(
                 lieu = lieu,
                 reference = position,
@@ -371,6 +406,10 @@ private fun AppSente() {
                         perso.retirerDeListe(l, liste)
                         versionPerso++
                     },
+                    onRenommer = { l, nom ->
+                        perso.renommerFavori(l, nom)
+                        versionPerso++
+                    },
                     onOublierRaccourci = { r ->
                         perso.definirRaccourci(r, null)
                         versionPerso++
@@ -402,14 +441,19 @@ private fun AppSente() {
             }
         }
 
-        SnackbarHost(messages, Modifier.align(Alignment.TopCenter).safeDrawingPadding())
+        if (enPetiteFenetre) {
+            g?.let { GuidagePetiteFenetre(it) }
+        } else {
+            SnackbarHost(messages, Modifier.align(Alignment.TopCenter).safeDrawingPadding())
+        }
     }
 
     choixListePour?.let { lieu ->
         ChoixListe(
+            nomInitial = lieu.nom,
             nomsExistants = perso.nomsDeListes(),
-            onChoisir = { liste ->
-                perso.ajouterFavori(lieu, liste)
+            onChoisir = { liste, nom ->
+                perso.ajouterFavori(lieu.renomme(nom), liste)
                 versionPerso++
                 choixListePour = null
                 afficherMessage("Enregistré dans « $liste »")

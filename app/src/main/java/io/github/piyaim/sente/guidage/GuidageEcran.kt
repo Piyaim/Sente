@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -198,6 +199,66 @@ private fun Vitesse(kmh: Int?) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(kmh?.toString() ?: "–", style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp, lineHeight = 30.sp))
             Text("km/h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * Petite fenêtre flottante quand on quitte Sente pendant un guidage (maquette « 9 · Guidage en petite
+ * fenêtre ») : manœuvre en haut, la carte reste visible dessous, arrivée en bas.
+ */
+@Composable
+fun GuidagePetiteFenetre(etat: EtatGuidage, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxSize()) {
+        when (etat) {
+            is EtatGuidage.EnCours -> {
+                Column(
+                    Modifier.fillMaxWidth().background(VERT_BANDEAU).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Icon(
+                        iconeManoeuvre(etat.instruction),
+                        contentDescription = etat.instruction?.primaryContent?.text,
+                        tint = Color.White,
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Text(
+                        distanceManoeuvre(etat.distanceManoeuvre),
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontSize = 26.sp, lineHeight = 28.sp),
+                    )
+                    Text(
+                        etat.instruction?.primaryContent?.text ?: "Suivez la route",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${heureArrivee(etat.dureeRestante)} · ${distanceRestante(etat.distanceRestante)}",
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Center,
+                )
+            }
+            is EtatGuidage.Arrive -> {
+                Column(
+                    Modifier.fillMaxWidth().background(VERT_BANDEAU).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(Icones.Valide, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                    Text("Vous êtes arrivé", color = Color.White, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Text(
+                        etat.destination.nom,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }

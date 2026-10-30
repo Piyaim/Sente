@@ -16,6 +16,14 @@
         android:name="android.permission.ACCESS_WIFI_STATE"
         tools:node="remove" />
 
+    <!-- Voix du guidage : depuis Android 11, une appli doit déclarer qu'elle cherche un moteur de
+         synthèse vocale pour pouvoir l'utiliser. Ce n'est pas une permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -27,7 +35,8 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

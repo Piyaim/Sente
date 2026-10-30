@@ -4,6 +4,8 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-10-30 | Petite fenêtre de guidage par l'incrustation d'image d'Android (choix A), pas par la superposition | Aucune permission ; ouverture seulement pendant un guidage ; désactivable dans les réglages Android |
+| 2026-10-30 | Favori renommé : le nom d'origine est gardé à part et sert toujours à reconnaître le lieu | L'étoile reste allumée quand on retrouve le lieu par la recherche |
 | 2026-10-30 | Guidage en arrière-plan avec service de premier plan et notification (choix B) | Le guidage et la voix continuent quand on ouvre une autre appli ; indispensable aussi pour Android Auto (lot 7) |
 | 2026-10-30 | Notification de guidage neutre (« Guidage en cours »), masquée sur l'écran verrouillé | Son texte est lisible sur l'écran verrouillé et par les applis ayant l'accès aux notifications (montres…) : aucune rue ni destination |
 | 2026-10-30 | Ferrostar reçoit les positions de notre source GPS, pas de sa source Android | Sa source choisit le fournisseur « fused », qui passe par Google sur la plupart des téléphones |

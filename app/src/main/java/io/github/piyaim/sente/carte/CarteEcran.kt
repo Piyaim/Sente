@@ -319,7 +319,8 @@ fun CarteEcran(
     // Guidage : la carte suit la voiture, dans le sens de la marche, point placé dans le bas de l'écran.
     val margeGuidage = with(densite) { (LocalConfiguration.current.screenHeightDp * 0.42f).dp.toPx() }.toDouble()
     var etaitEnGuidage by remember { mutableStateOf(false) }
-    LaunchedEffect(carte, composantActif, guidage, recentrage) {
+    // Relancé aussi quand la taille change (entrée ou sortie de la petite fenêtre flottante).
+    LaunchedEffect(carte, composantActif, guidage, recentrage, margeGuidage) {
         val m = carte ?: return@LaunchedEffect
         if (!composantActif) return@LaunchedEffect
         val composant = m.locationComponent

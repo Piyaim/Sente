@@ -53,6 +53,10 @@ Ce que fait ensuite cette autre appli ne dépend plus de Sente.
 
 Sente transmet le texte des consignes (par exemple « Tournez à droite dans le cours Jean-Jaurès ») au moteur de synthèse vocale choisi dans les réglages d'Android. Ce moteur est une application séparée, avec sa propre politique : celui de Google peut, selon ses réglages, utiliser des voix en ligne et recevoir ce texte. SherpaTTS, moteur libre, fonctionne entièrement hors ligne après avoir téléchargé sa voix une fois. Le bouton haut-parleur coupe la voix.
 
+### Petite fenêtre flottante
+
+Pendant un guidage, quitter Sente ouvre une petite fenêtre (incrustation d'image d'Android) qui montre la prochaine manœuvre, un morceau de carte et l'heure d'arrivée par-dessus les autres applis. Elle est visible par les personnes qui regardent l'écran, comme le guidage en plein écran. Aucune autre appli ne peut en lire le contenu. Elle se désactive dans les réglages Android de Sente (« Incrustation d'image »).
+
 ### Écran verrouillé
 
 La notification de guidage est masquée sur l'écran verrouillé. Même déverrouillée, elle ne dit rien du trajet : c'est voulu, car les applis qui ont l'accès aux notifications (celle d'une montre connectée, par exemple) peuvent lire leur texte.

@@ -28,15 +28,24 @@ data class Lieu(
     val site: String? = null,
     val fauteuil: String? = null,
     val osm: String? = null,
+    /** Nom d'origine quand l'utilisateur a renommé le lieu (favori) ; null sinon. */
+    val nomOrigine: String? = null,
 ) {
-    /** Identifie un même endroit d'une recherche à l'autre (favoris, historique). */
-    val cle: String get() = "${type.name}|${Normalisation.normaliser(nom)}|${"%.5f".format(Locale.ROOT, lat)}|${"%.5f".format(Locale.ROOT, lon)}"
+    /** Identifie un même endroit d'une recherche à l'autre (favoris, historique), même renommé. */
+    val cle: String get() = "${type.name}|${Normalisation.normaliser(nomOrigine ?: nom)}|${"%.5f".format(Locale.ROOT, lat)}|${"%.5f".format(Locale.ROOT, lon)}"
 
     fun versJson(): JSONObject = JSONObject().apply {
         put("type", type.name); put("nom", nom); put("sous_titre", sousTitre); put("lat", lat); put("lon", lon)
         code?.let { put("code", it) }; libelle?.let { put("libelle", it) }; adresse?.let { put("adresse", it) }
         horaires?.let { put("horaires", it) }; telephone?.let { put("telephone", it) }; site?.let { put("site", it) }
-        fauteuil?.let { put("fauteuil", it) }; osm?.let { put("osm", it) }
+        fauteuil?.let { put("fauteuil", it) }; osm?.let { put("osm", it) }; nomOrigine?.let { put("nom_origine", it) }
+    }
+
+    /** Le même lieu sous un autre nom ; revenir au nom d'origine efface le renommage. */
+    fun renomme(nouveau: String): Lieu {
+        val origine = nomOrigine ?: nom
+        val propre = nouveau.trim().ifEmpty { origine }
+        return copy(nom = propre, nomOrigine = origine.takeIf { it != propre })
     }
 
     companion object {
@@ -50,6 +59,7 @@ data class Lieu(
                 lon = j.getDouble("lon"),
                 code = opt("code"), libelle = opt("libelle"), adresse = opt("adresse"), horaires = opt("horaires"),
                 telephone = opt("telephone"), site = opt("site"), fauteuil = opt("fauteuil"), osm = opt("osm"),
+                nomOrigine = opt("nom_origine"),
             )
         }.getOrNull()
     }

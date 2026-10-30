@@ -50,6 +50,7 @@ object Icones {
     val Partager = trait("partager", 2.2f, "M12,3.5 V14.5", "M7.5,8 L12,3.5 L16.5,8", "M5,12.5 V19.5 H19 V12.5")
     val Fauteuil = trait("fauteuil", 2f, cercle(12f, 4.5f, 1.8f), "M12,7.5 V13 H17 L19,19", "M8.5,10.5 A5.5,5.5 0 1 0 15.5,18")
     val Itineraire = trait("itineraire", 2.2f, "M5,19 L5,13 C5,10 7,9 10,9 L18,9", "M14,5 L18,9 L14,13")
+    val Crayon = trait("crayon", 2.2f, "M4,20 H8 L19,9 L15,5 L4,16 Z", "M13,7 L17,11")
     val Supprimer = trait("supprimer", 2f, "M4,7 H20", "M9,7 V4 H15 V7", "M6,7 L7,20 H17 L18,7")
     val Valide = trait("valide", 2.2f, "M5,12.5 L10,17.5 L19,7")
     val Lecture = trait("lecture", 2.2f, "M7,4.5 L19,12 L7,19.5 Z")

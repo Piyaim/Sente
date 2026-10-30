@@ -45,9 +45,12 @@ fun FavorisEcran(
     reference: Reference?,
     onChoisir: (Lieu) -> Unit,
     onRetirer: (Lieu, String) -> Unit,
+    onRenommer: (Lieu, String) -> Unit,
     onOublierRaccourci: (Raccourci) -> Unit,
     onRetour: () -> Unit,
 ) {
+    var aRenommer by remember { mutableStateOf<Lieu?>(null) }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -118,7 +121,16 @@ fun FavorisEcran(
                                 sousTitre = lieu.sousTitre,
                                 droite = reference?.let { distanceLisible(distanceMetres(it.lat, it.lon, lieu.lat, lieu.lon)) },
                                 onClick = { onChoisir(lieu) },
-                                fin = { BoutonRetirer("Retirer ${lieu.nom}") { onRetirer(lieu, liste.nom) } },
+                                fin = {
+                                    Row {
+                                        BoutonIcone(
+                                            Icones.Crayon, "Renommer ${lieu.nom}", { aRenommer = lieu },
+                                            taille = 44.dp, rayon = 22.dp, fond = MaterialTheme.colorScheme.surface,
+                                            encre = MaterialTheme.colorScheme.onSurfaceVariant, ombre = false,
+                                        )
+                                        BoutonRetirer("Retirer ${lieu.nom}") { onRetirer(lieu, liste.nom) }
+                                    }
+                                },
                             )
                         }
                     }
@@ -126,6 +138,42 @@ fun FavorisEcran(
             }
         }
     }
+
+    aRenommer?.let { lieu ->
+        DialogueRenommer(
+            lieu,
+            onValider = { nom ->
+                onRenommer(lieu, nom)
+                aRenommer = null
+            },
+            onAnnuler = { aRenommer = null },
+        )
+    }
+}
+
+@Composable
+private fun DialogueRenommer(lieu: Lieu, onValider: (String) -> Unit, onAnnuler: () -> Unit) {
+    var nom by remember { mutableStateOf(lieu.nom) }
+    AlertDialog(
+        onDismissRequest = onAnnuler,
+        title = { Text("Renommer") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = nom,
+                    onValueChange = { nom = it.take(60) },
+                    singleLine = true,
+                    label = { Text("Nom") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                lieu.nomOrigine?.let {
+                    Text("Nom d'origine : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onValider(nom) }) { Text("Renommer") } },
+        dismissButton = { TextButton(onClick = onAnnuler) { Text("Annuler") } },
+    )
 }
 
 @Composable
@@ -139,7 +187,13 @@ private fun BoutonRetirer(description: String, onClick: () -> Unit) {
 
 /** Choix de la liste où enregistrer un favori (ou création d'une nouvelle liste). */
 @Composable
-fun ChoixListe(nomsExistants: List<String>, onChoisir: (String) -> Unit, onAnnuler: () -> Unit) {
+fun ChoixListe(
+    nomInitial: String,
+    nomsExistants: List<String>,
+    onChoisir: (liste: String, nom: String) -> Unit,
+    onAnnuler: () -> Unit,
+) {
+    var nomLieu by remember { mutableStateOf(nomInitial) }
     var choisie by remember { mutableStateOf(nomsExistants.firstOrNull() ?: LISTE_PAR_DEFAUT) }
     var nouvelle by remember { mutableStateOf("") }
     var creation by remember { mutableStateOf(false) }
@@ -148,6 +202,13 @@ fun ChoixListe(nomsExistants: List<String>, onChoisir: (String) -> Unit, onAnnul
         title = { Text("Enregistrer dans") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedTextField(
+                    value = nomLieu,
+                    onValueChange = { nomLieu = it.take(60) },
+                    singleLine = true,
+                    label = { Text("Nom") },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                )
                 nomsExistants.forEach { nom ->
                     Row(
                         Modifier
@@ -186,7 +247,7 @@ fun ChoixListe(nomsExistants: List<String>, onChoisir: (String) -> Unit, onAnnul
         },
         confirmButton = {
             TextButton(
-                onClick = { onChoisir(if (creation) nouvelle.trim() else choisie) },
+                onClick = { onChoisir(if (creation) nouvelle.trim() else choisie, nomLieu) },
                 enabled = !creation || nouvelle.isNotBlank(),
             ) { Text("Enregistrer") }
         },
