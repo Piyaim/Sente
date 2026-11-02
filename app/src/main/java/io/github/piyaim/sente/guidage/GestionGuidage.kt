@@ -1,6 +1,7 @@
 package io.github.piyaim.sente.guidage
 
 import android.content.Context
+import android.content.Intent
 import android.location.Location
 import android.speech.tts.TextToSpeech
 import com.stadiamaps.ferrostar.core.AndroidTtsObserver
@@ -83,8 +84,11 @@ class GestionGuidage(context: Context, private val moteur: MoteurItineraire) {
             override fun onTtsInitialized(tts: TextToSpeech?, status: Int) {
                 val langue = tts?.setLanguage(Locale.FRANCE)
                 _problemeVoix.value = when {
-                    tts == null || status != TextToSpeech.SUCCESS ->
-                        "Voix indisponible : aucun moteur de synthèse vocale n'a répondu (réglages Android → Synthèse vocale)."
+                    tts == null || status != TextToSpeech.SUCCESS -> if (aucunMoteurInstalle()) {
+                        "Aucun moteur de synthèse vocale installé : installez-en un (par exemple SherpaTTS, libre et hors ligne, sur F-Droid), puis choisissez-le dans les réglages Android."
+                    } else {
+                        "Voix indisponible : le moteur de synthèse vocale ne répond pas (réglages Android → Sortie de la synthèse vocale)."
+                    }
                     langue == TextToSpeech.LANG_MISSING_DATA || langue == TextToSpeech.LANG_NOT_SUPPORTED ->
                         "Voix française absente du moteur de synthèse vocale : installez-la dans les réglages Android."
                     else -> null
@@ -97,6 +101,10 @@ class GestionGuidage(context: Context, private val moteur: MoteurItineraire) {
         },
     )
     private var voixDemarree = false
+
+    /** Aucune appli de synthèse vocale sur le téléphone (déclarée dans le manifeste : <queries>). */
+    private fun aucunMoteurInstalle(): Boolean =
+        contexte.packageManager.queryIntentServices(Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0).isEmpty()
 
     private var core: FerrostarCore? = null
     private var collecte: Job? = null

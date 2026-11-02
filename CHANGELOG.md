@@ -2,6 +2,14 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
+## [0.3.3-pre1] - 2026-11-02
+
+### Modifié
+
+- Voix : message distinct quand aucun moteur de synthèse vocale n'est installé, avec la suggestion de SherpaTTS (libre, hors ligne).
+- Pendant le guidage, les messages s'affichent en bas et ne cachent plus la prochaine manœuvre.
+- README : état du projet à jour (lot 3 terminé).
+
 ## [0.3.2-pre1] - 2026-10-30
 
 ### Ajouté

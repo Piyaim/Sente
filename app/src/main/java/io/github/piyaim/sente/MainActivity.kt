@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import io.github.piyaim.sente.carte.CarteEcran
 import io.github.piyaim.sente.carte.AffichageTrajet
 import io.github.piyaim.sente.guidage.ArriveeCarte
@@ -444,7 +446,15 @@ private fun AppSente(enPetiteFenetre: Boolean, onGuidageActif: (Boolean) -> Unit
         if (enPetiteFenetre) {
             g?.let { GuidagePetiteFenetre(it) }
         } else {
-            SnackbarHost(messages, Modifier.align(Alignment.TopCenter).safeDrawingPadding())
+            // Pendant le guidage, les messages passent en bas pour ne pas cacher la prochaine manœuvre.
+            SnackbarHost(
+                messages,
+                if (enGuidage) {
+                    Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 104.dp)
+                } else {
+                    Modifier.align(Alignment.TopCenter).safeDrawingPadding()
+                },
+            )
         }
     }
 
