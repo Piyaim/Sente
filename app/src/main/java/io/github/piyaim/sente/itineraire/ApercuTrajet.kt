@@ -28,6 +28,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import io.github.piyaim.sente.recherche.Reference
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,8 +76,23 @@ fun ApercuTrajet(
     onDemarrer: () -> Unit,
     onSimuler: () -> Unit,
     onRetour: () -> Unit,
+    tarifs: TarifsPeages?,
+    classe: ClassePeage,
+    budget: Int?,
+    onClasse: (ClassePeage) -> Unit,
+    onBudget: (Int?) -> Unit,
+    onEviter: (Reference) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var detail by remember(etat.destination) { mutableStateOf(false) }
+
+    /** Coût des péages d'un trajet ; null si les tarifs de la région manquent. */
+    fun cout(p: Proposition): CoutPeages? = when {
+        !p.peages -> CoutPeages(emptyList(), 0, complet = true)
+        tarifs == null || p.passages == null -> null
+        else -> tarifs.cout(p.passages, classe)
+    }
+
     Box(modifier.fillMaxSize()) {
         Row(
             Modifier
@@ -120,35 +140,77 @@ fun ApercuTrajet(
                         .height(5.dp)
                         .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(3.dp)),
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Option("Éviter les péages", etat.options.eviterPeages) { onOptions(etat.options.copy(eviterPeages = it)) }
-                    Option("Éviter les autoroutes", etat.options.eviterAutoroutes) { onOptions(etat.options.copy(eviterAutoroutes = it)) }
-                }
-
-                val propositions = etat.propositions
-                when {
-                    etat.erreur != null -> Text(etat.erreur, style = MaterialTheme.typography.bodyLarge)
-                    propositions == null -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                val choisie = etat.proposition
+                if (detail && choisie != null) {
+                    DetailPeages(
+                        proposition = choisie,
+                        cout = cout(choisie),
+                        tarifs = tarifs,
+                        classe = classe,
+                        budget = budget,
+                        onClasse = onClasse,
+                        onBudget = onBudget,
+                        onEviter = {
+                            detail = false
+                            onEviter(it)
+                        },
+                        onRetour = { detail = false },
+                    )
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Option("Éviter les péages", etat.options.eviterPeages) { onOptions(etat.options.copy(eviterPeages = it)) }
+                        Option("Éviter les autoroutes", etat.options.eviterAutoroutes) { onOptions(etat.options.copy(eviterAutoroutes = it)) }
+                        val evitees = etat.options.exclusions.size
+                        if (evitees > 0) {
+                            Option(if (evitees == 1) "1 section évitée ✕" else "$evitees sections évitées ✕", true) {
+                                onOptions(etat.options.copy(exclusions = emptyList()))
+                            }
+                        }
                     }
-                    else -> propositions.forEachIndexed { i, p ->
-                        CarteProposition(p, principale = i == 0, choisie = i == etat.choisie) { onChoisir(i) }
-                    }
-                }
 
-                Button(
-                    onClick = onDemarrer,
-                    enabled = etat.proposition != null,
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                    shape = RoundedCornerShape(30.dp),
-                ) {
-                    Icon(Icones.Lecture, contentDescription = null, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Démarrer", style = MaterialTheme.typography.titleLarge)
-                }
-                // Pour les préversions : essayer le guidage sans rouler.
-                TextButton(onClick = onSimuler, enabled = etat.proposition != null, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text("Essai : simuler le trajet")
+                    val propositions = etat.propositions
+                    when {
+                        etat.erreur != null -> Text(etat.erreur, style = MaterialTheme.typography.bodyLarge)
+                        propositions == null -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                        }
+                        else -> propositions.forEachIndexed { i, p ->
+                            CarteProposition(
+                                p,
+                                principale = i == 0,
+                                choisie = i == etat.choisie,
+                                cout = cout(p),
+                                onPeages = {
+                                    onChoisir(i)
+                                    detail = true
+                                },
+                            ) { onChoisir(i) }
+                        }
+                    }
+                    val coutChoisi = choisie?.let { cout(it) }
+                    if (budget != null && coutChoisi != null && coutChoisi.totalCentimes > budget) {
+                        Text(
+                            "Au-dessus de votre budget péage de ${prixLisible(coutChoisi.totalCentimes - budget)}" +
+                                if (propositions?.any { it.sansPeage } == true) " : la variante sans péage est proposée." else ".",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    Button(
+                        onClick = onDemarrer,
+                        enabled = etat.proposition != null,
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        shape = RoundedCornerShape(30.dp),
+                    ) {
+                        Icon(Icones.Lecture, contentDescription = null, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Démarrer", style = MaterialTheme.typography.titleLarge)
+                    }
+                    // Pour les préversions : essayer le guidage sans rouler.
+                    TextButton(onClick = onSimuler, enabled = etat.proposition != null, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        Text("Essai : simuler le trajet")
+                    }
                 }
             }
         }
@@ -179,7 +241,14 @@ private fun Option(texte: String, active: Boolean, onChange: (Boolean) -> Unit) 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CarteProposition(p: Proposition, principale: Boolean, choisie: Boolean, onClick: () -> Unit) {
+private fun CarteProposition(
+    p: Proposition,
+    principale: Boolean,
+    choisie: Boolean,
+    cout: CoutPeages?,
+    onPeages: () -> Unit,
+    onClick: () -> Unit,
+) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
@@ -202,7 +271,14 @@ private fun CarteProposition(p: Proposition, principale: Boolean, choisie: Boole
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (principale) Etiquette("Le plus rapide", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
                 if (p.sansPeage) Etiquette("Sans péage", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                if (p.peages) Etiquette("Péages", FOND_PEAGE, ENCRE_PEAGE)
+                if (p.peages) {
+                    val texte = when {
+                        cout == null -> "Péages"
+                        cout.complet -> "Péages ≈ ${prixLisible(cout.totalCentimes)}"
+                        else -> "Péages ≥ ${prixLisible(cout.totalCentimes)}"
+                    }
+                    Etiquette(texte, FOND_PEAGE, ENCRE_PEAGE, onClick = onPeages)
+                }
                 if (p.resume.isNotBlank()) {
                     Etiquette("Par ${p.resume}", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSurface)
                 }
@@ -212,10 +288,14 @@ private fun CarteProposition(p: Proposition, principale: Boolean, choisie: Boole
 }
 
 @Composable
-private fun Etiquette(texte: String, fond: Color, encre: Color) {
+private fun Etiquette(texte: String, fond: Color, encre: Color, onClick: (() -> Unit)? = null) {
     Text(
         texte,
-        modifier = Modifier.background(fond, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(fond)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .padding(horizontal = 10.dp, vertical = if (onClick != null) 8.dp else 4.dp),
         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
         color = encre,
         maxLines = 1,

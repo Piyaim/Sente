@@ -2,6 +2,16 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
+## [0.4.0-pre1] - 2026-11-02
+
+### Ajouté
+
+- Prix des péages sur chaque trajet proposé (« Péages ≈ 13,60 € »), calculé hors ligne à partir des gares réellement traversées.
+- Détail des péages : chaque section payante (entrée → sortie, ou barrière), son prix, sa société et sa longueur ; bouton « Éviter cette section » qui recalcule le trajet ; « N sections évitées ✕ » pour revenir en arrière.
+- Classe Voiture ou Moto, et budget péage maximum, retenus d'un trajet à l'autre ; alerte quand le trajet choisi dépasse le budget.
+- Gares de péage traversées marquées en jaune sur la carte.
+- Nouveau fichier facultatif par région, « péages » (`.peages.json`, quelques centaines de Ko), à ajouter dans « Cartes et réglages ». Données OpenTollData (ODbL), prix indicatifs.
+
 ## [0.3.3-pre1] - 2026-11-02
 
 ### Modifié

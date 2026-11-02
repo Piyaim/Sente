@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -42,6 +43,8 @@ import io.github.piyaim.sente.guidage.GestionGuidage
 import io.github.piyaim.sente.guidage.GuidageEcran
 import io.github.piyaim.sente.guidage.GuidagePetiteFenetre
 import io.github.piyaim.sente.itineraire.ApercuTrajet
+import io.github.piyaim.sente.itineraire.ClassePeage
+import io.github.piyaim.sente.itineraire.TarifsPeages
 import io.github.piyaim.sente.itineraire.EtatApercu
 import io.github.piyaim.sente.itineraire.MoteurItineraire
 import io.github.piyaim.sente.itineraire.reference
@@ -111,6 +114,14 @@ private fun AppSente(enPetiteFenetre: Boolean, onGuidageActif: (Boolean) -> Unit
     val moteur = remember { MoteurItineraire(context.applicationContext) }
     val guidage = remember { GestionGuidage(context.applicationContext, moteur) }
     val messages = remember { SnackbarHostState() }
+    val reglages = remember { Reglages(context.applicationContext) }
+    // Péages : classe de véhicule et budget retenus d'un trajet à l'autre ; tarifs de la région affichée.
+    var classePeage by remember { mutableStateOf(runCatching { ClassePeage.valueOf(reglages.classePeage) }.getOrDefault(ClassePeage.VOITURE)) }
+    var budgetPeage by remember { mutableStateOf(reglages.budgetPeage.takeIf { it >= 0 }) }
+    val fichierPeages = gestion.affichee?.peages
+    val tarifsPeages by produceState<TarifsPeages?>(null, fichierPeages?.absolutePath, gestion.affichee?.peagesDonnees) {
+        value = withContext(Dispatchers.IO) { fichierPeages?.let { TarifsPeages.lire(it) } }
+    }
 
     var ecran by rememberSaveable { mutableStateOf(Ecran.CARTE) }
     var selectionJson by rememberSaveable { mutableStateOf<String?>(null) }
@@ -268,6 +279,7 @@ private fun AppSente(enPetiteFenetre: Boolean, onGuidageActif: (Boolean) -> Unit
             variante = a.propositions?.filterIndexed { i, _ -> i != a.choisie }?.firstOrNull()?.points,
             arrivee = a.destination,
             guidage = false,
+            peages = a.proposition?.passages?.let { passages -> tarifsPeages?.cout(passages, classePeage)?.gares }.orEmpty(),
         )
         else -> null
     }
@@ -349,6 +361,18 @@ private fun AppSente(enPetiteFenetre: Boolean, onGuidageActif: (Boolean) -> Unit
                     onDemarrer = { demarrer(simuler = false) },
                     onSimuler = { demarrer(simuler = true) },
                     onRetour = { apercu = null },
+                    tarifs = tarifsPeages,
+                    classe = classePeage,
+                    budget = budgetPeage,
+                    onClasse = {
+                        classePeage = it
+                        reglages.classePeage = it.name
+                    },
+                    onBudget = {
+                        budgetPeage = it
+                        reglages.budgetPeage = it ?: -1
+                    },
+                    onEviter = { gare -> calculerApercu(a.copy(options = a.options.copy(exclusions = a.options.exclusions + gare))) },
                 )
             }
         }

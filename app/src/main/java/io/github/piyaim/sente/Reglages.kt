@@ -19,4 +19,14 @@ class Reglages(context: Context) {
     var regionAffichee: String?
         get() = memoire.getString("region_affichee", null)
         set(valeur) = memoire.edit().putString("region_affichee", valeur).apply()
+
+    /** Classe de véhicule pour le prix des péages : « VOITURE » ou « MOTO ». */
+    var classePeage: String
+        get() = memoire.getString("classe_peage", "VOITURE") ?: "VOITURE"
+        set(valeur) = memoire.edit().putString("classe_peage", valeur).apply()
+
+    /** Budget péage maximum par trajet, en centimes ; -1 : pas de budget. */
+    var budgetPeage: Int
+        get() = memoire.getInt("budget_peage", -1)
+        set(valeur) = memoire.edit().putInt("budget_peage", valeur).apply()
 }

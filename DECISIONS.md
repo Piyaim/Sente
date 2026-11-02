@@ -4,6 +4,10 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-11-02 | Tarifs des péages tirés d'OpenTollData (données ODbL), version figée par commit, en fichier `.peages.json` par région (choix A) | Seule base libre des tarifs entrée → sortie français ; calcul entièrement hors ligne, sans service tiers |
+| 2026-11-02 | Gares traversées repérées par Valhalla (« trace_attributes », nœuds cabine), puis reliées à la gare OpenTollData la plus proche (moins de 400 m) | Chercher les gares près du tracé comptait aussi les bretelles voisines ; une cabine non reconnue rend le total « au moins » |
+| 2026-11-02 | « Éviter cette section » exclut la gare d'entrée dans un rayon de 150 m | Sans rayon, Valhalla n'excluait que l'arête la plus proche et repassait par la gare |
+| 2026-11-02 | Classe de péage (voiture ou moto, classe 5) et budget gardés dans les réglages de l'appli, sur le téléphone | Le prix dépend du véhicule ; le profil moto complet viendra plus tard |
 | 2026-10-30 | Vérification automatique avant chaque envoi (`.githooks/pre-push`) et protection des secrets de GitHub activée | Après la fuite de clé du lot 0 bis : aucun fichier de clé, secret, gros fichier ni donnée personnelle ne doit partir ; la liste personnelle reste hors du dépôt |
 | 2026-10-30 | Petite fenêtre de guidage par l'incrustation d'image d'Android (choix A), pas par la superposition | Aucune permission ; ouverture seulement pendant un guidage ; désactivable dans les réglages Android |
 | 2026-10-30 | Favori renommé : le nom d'origine est gardé à part et sert toujours à reconnaître le lieu | L'étoile reste allumée quand on retrouve le lieu par la recherche |

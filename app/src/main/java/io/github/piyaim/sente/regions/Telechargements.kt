@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import io.github.piyaim.sente.itineraire.MoteurItineraire
+import io.github.piyaim.sente.itineraire.TarifsPeages
 import io.github.piyaim.sente.recherche.IndexRecherche
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -88,6 +89,7 @@ class Telechargements(private val context: Context, private val depot: DepotRegi
                     TypeFichier.CARTE -> "Carte hors ligne"
                     TypeFichier.RECHERCHE -> "Recherche hors ligne"
                     TypeFichier.ROUTAGE -> "Itinéraire hors ligne"
+                    TypeFichier.PEAGES -> "Tarifs des péages"
                 },
             )
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
@@ -180,6 +182,7 @@ class Telechargements(private val context: Context, private val depot: DepotRegi
                 TypeFichier.CARTE -> Pmtiles.lireEnTete(partiel) != null
                 TypeFichier.RECHERCHE -> IndexRecherche.lireMeta(partiel)?.get("region") == tache.regionId
                 TypeFichier.ROUTAGE -> MoteurItineraire.estTuilesValhalla(partiel)
+                TypeFichier.PEAGES -> TarifsPeages.lireRegion(partiel) == tache.regionId
             }
             if (!valide) throw IOException("Le fichier reçu n'est pas valide.")
             destination.delete()
@@ -188,6 +191,7 @@ class Telechargements(private val context: Context, private val depot: DepotRegi
                 TypeFichier.CARTE -> depot.majMeta(tache.regionId, nom = tache.regionNom, donnees = tache.fichier.donnees, origine = "catalogue")
                 TypeFichier.RECHERCHE -> depot.majMeta(tache.regionId, nom = tache.regionNom, rechercheDonnees = tache.fichier.donnees)
                 TypeFichier.ROUTAGE -> depot.majMeta(tache.regionId, nom = tache.regionNom, routageDonnees = tache.fichier.donnees)
+                TypeFichier.PEAGES -> depot.majMeta(tache.regionId, nom = tache.regionNom, peagesDonnees = tache.fichier.donnees)
             }
             Result.success(tache)
         } catch (e: IOException) {

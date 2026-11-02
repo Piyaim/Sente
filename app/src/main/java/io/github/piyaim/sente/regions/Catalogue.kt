@@ -22,8 +22,9 @@ data class RegionCatalogue(
     val zoomMax: Int,
     val recherche: FichierCatalogue?,
     val routage: FichierCatalogue? = null,
+    val peages: FichierCatalogue? = null,
 ) {
-    val tailleTotale: Long get() = carte.taille + (recherche?.taille ?: 0L) + (routage?.taille ?: 0L)
+    val tailleTotale: Long get() = carte.taille + (recherche?.taille ?: 0L) + (routage?.taille ?: 0L) + (peages?.taille ?: 0L)
 
     companion object {
         fun depuisJson(json: JSONObject): RegionCatalogue {
@@ -38,6 +39,7 @@ data class RegionCatalogue(
                 zoomMax = json.optInt("zoom_max", 14),
                 recherche = recherche,
                 routage = complement("routage"),
+                peages = complement("peages"),
             )
         }
     }

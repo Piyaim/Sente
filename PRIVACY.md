@@ -22,9 +22,9 @@ La permission « état du Wi-Fi », ajoutée par MapLibre, est retirée. Les not
 Aucune connexion au démarrage ni en arrière-plan. Seulement, à votre demande :
 
 - **Liste des régions** : `catalogue.json` sur `github.com` (dépôt Piyaim/Sente-cartes), redirigé par GitHub vers ses serveurs de fichiers (`*.githubusercontent.com`).
-- **Fichiers d'une région** (carte, recherche, itinéraire) : même origine, téléchargés par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
+- **Fichiers d'une région** (carte, recherche, itinéraire, péages) : même origine, téléchargés par le gestionnaire de téléchargements d'Android (qui affiche une notification de progression).
 - Dans les deux cas, Sente envoie l'en-tête `User-Agent: Sente` à la place de celui d'Android, qui contiendrait le modèle du téléphone. GitHub voit votre adresse IP et l'heure.
-- **Sans aucun réseau** : copiez les fichiers `.pmtiles`, `.recherche.db` et `.routage.tar` sur le téléphone et utilisez « Importer un fichier ».
+- **Sans aucun réseau** : copiez les fichiers `.pmtiles`, `.recherche.db`, `.routage.tar` et `.peages.json` sur le téléphone et utilisez « Importer un fichier ».
 
 La carte (MapLibre), la recherche et le calcul d'itinéraire (Valhalla) ne contactent aucun serveur : style, polices, icônes, carte, index de recherche et tuiles d'itinéraire sont lus sur le téléphone. Ce que vous tapez dans la recherche, votre point de départ et votre destination ne sortent pas du téléphone.
 
@@ -63,7 +63,7 @@ La notification de guidage est masquée sur l'écran verrouillé. Même déverro
 
 ### Données enregistrées sur le téléphone
 
-- Les cartes, index de recherche et tuiles d'itinéraire installés, la région affichée, l'option de position et, pendant un téléchargement, sa référence.
+- Les cartes, index de recherche, tuiles d'itinéraire et tarifs de péages installés, la région affichée, l'option de position, la classe de péage (voiture ou moto) et le budget péage et, pendant un téléchargement, sa référence.
 - Vos favoris et leurs listes, domicile et travail, et vos 30 dernières recherches ouvertes (le lieu choisi, pas ce que vous avez tapé), dans une base privée à l'appli.
 - Rien de cela n'est envoyé. « Cartes et réglages » → « Mes données » permet de tout exporter en JSON ou de tout effacer d'un geste. Tout disparaît aussi à la désinstallation ; la sauvegarde automatique d'Android est désactivée pour Sente.
 

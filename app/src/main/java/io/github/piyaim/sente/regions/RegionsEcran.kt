@@ -137,6 +137,15 @@ fun RegionsEcran(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                Text(
+                                    if (region.peages != null) {
+                                        listOfNotNull("Péages", dateLisible(region.peagesDonnees)?.let { "tarifs du $it" }).joinToString(" · ")
+                                    } else {
+                                        "Péages non installés"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                             TextButton(onClick = { aSupprimer = region }) { Text("Supprimer") }
                         }
@@ -189,6 +198,7 @@ fun RegionsEcran(
                                                         "Carte ${tailleLisible(region.carte.taille)}",
                                                         region.recherche?.let { "recherche ${tailleLisible(it.taille)}" },
                                                         region.routage?.let { "itinéraire ${tailleLisible(it.taille)}" },
+                                                        region.peages?.let { "péages ${tailleLisible(it.taille)}" },
                                                     ).joinToString(" · "),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -202,6 +212,7 @@ fun RegionsEcran(
                                                             !installee -> "Télécharger"
                                                             taches.all { it.type == TypeFichier.RECHERCHE } -> "Ajouter la recherche"
                                                             taches.all { it.type == TypeFichier.ROUTAGE } -> "Ajouter l'itinéraire"
+                                                            taches.all { it.type == TypeFichier.PEAGES } -> "Ajouter les péages"
                                                             taches.none { it.type == TypeFichier.CARTE } -> "Compléter"
                                                             else -> "Mettre à jour"
                                                         },
@@ -218,7 +229,7 @@ fun RegionsEcran(
 
                 Section("Importer un fichier") {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Paragraphe("Pour n'avoir aucun échange réseau : copiez sur le téléphone la carte (.pmtiles), la recherche (.recherche.db) et l'itinéraire (.routage.tar, sans le renommer) d'une région, puis importez-les.")
+                        Paragraphe("Pour n'avoir aucun échange réseau : copiez sur le téléphone la carte (.pmtiles), la recherche (.recherche.db) et l'itinéraire (.routage.tar, sans le renommer) et les péages (.peages.json) d'une région, puis importez-les.")
                         OutlinedButton(onClick = { choixFichier.launch(arrayOf("*/*")) }, enabled = !gestion.importEnCours) {
                             Text(if (gestion.importEnCours) "Import en cours…" else "Choisir un fichier")
                         }
@@ -270,7 +281,7 @@ fun RegionsEcran(
         AlertDialog(
             onDismissRequest = { aSupprimer = null },
             title = { Text("Supprimer ${region.nom} ?") },
-            text = { Text("La carte, la recherche et l'itinéraire (${tailleLisible(region.taille + region.tailleRecherche + region.tailleRoutage)}) seront effacés du téléphone.") },
+            text = { Text("La carte, la recherche, l'itinéraire et les péages (${tailleLisible(region.taille + region.tailleRecherche + region.tailleRoutage + (region.peages?.length() ?: 0L))}) seront effacés du téléphone.") },
             confirmButton = {
                 TextButton(onClick = {
                     gestion.supprimer(region.id)

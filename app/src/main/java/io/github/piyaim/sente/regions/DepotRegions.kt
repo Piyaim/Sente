@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import io.github.piyaim.sente.itineraire.MoteurItineraire
+import io.github.piyaim.sente.itineraire.TarifsPeages
 import io.github.piyaim.sente.recherche.IndexRecherche
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,7 +17,8 @@ import java.text.Normalizer
 /**
  * Dossier (privé à l'appli) des régions. Pour une région <id> :
  * <id>.pmtiles (carte), <id>.recherche.db (index de recherche, facultatif),
- * <id>.routage.tar (tuiles d'itinéraire, facultatif), <id>.json (nom, dates, origine).
+ * <id>.routage.tar (tuiles d'itinéraire, facultatif), <id>.peages.json (tarifs des péages, facultatif),
+ * <id>.json (nom, dates, origine).
  */
 const val DOSSIER_REGIONS = "regions"
 
@@ -24,6 +26,7 @@ enum class TypeFichier(val suffixe: String, val libelle: String) {
     CARTE(".pmtiles", "carte"),
     RECHERCHE(".recherche.db", "recherche"),
     ROUTAGE(".routage.tar", "itinéraire"),
+    PEAGES(".peages.json", "péages"),
 }
 
 data class RegionInstallee(
@@ -38,6 +41,9 @@ data class RegionInstallee(
     val rechercheDonnees: String?,
     val routage: File? = null,
     val routageDonnees: String? = null,
+    val peages: File? = null,
+    /** Date des tarifs de péage, « 20260403 ». */
+    val peagesDonnees: String? = null,
 ) {
     val tailleRecherche: Long get() = recherche?.length() ?: 0L
     val tailleRoutage: Long get() = routage?.length() ?: 0L
@@ -61,6 +67,7 @@ class DepotRegions(private val context: Context) {
                 val meta = lireMeta(id)
                 val recherche = File(dossier, id + TypeFichier.RECHERCHE.suffixe).takeIf { it.isFile }
                 val routage = File(dossier, id + TypeFichier.ROUTAGE.suffixe).takeIf { it.isFile }
+                val peages = File(dossier, id + TypeFichier.PEAGES.suffixe).takeIf { it.isFile }
                 RegionInstallee(
                     id = id,
                     nom = meta?.optString("nom").orEmpty().ifBlank { id },
@@ -73,6 +80,8 @@ class DepotRegions(private val context: Context) {
                     rechercheDonnees = meta?.optString("recherche_donnees").orEmpty().ifBlank { null },
                     routage = routage,
                     routageDonnees = meta?.optString("routage_donnees").orEmpty().ifBlank { null },
+                    peages = peages,
+                    peagesDonnees = meta?.optString("peages_donnees").orEmpty().ifBlank { null },
                 )
             }
             .sortedBy { it.nom }
@@ -91,6 +100,7 @@ class DepotRegions(private val context: Context) {
         origine: String? = null,
         rechercheDonnees: String? = null,
         routageDonnees: String? = null,
+        peagesDonnees: String? = null,
     ) {
         val dossier = dossier ?: return
         val meta = lireMeta(id) ?: JSONObject()
@@ -99,6 +109,7 @@ class DepotRegions(private val context: Context) {
         origine?.let { meta.put("origine", it) }
         rechercheDonnees?.let { meta.put("recherche_donnees", it) }
         routageDonnees?.let { meta.put("routage_donnees", it) }
+        peagesDonnees?.let { meta.put("peages_donnees", it) }
         File(dossier, "$id.json").writeText(meta.toString())
     }
 
@@ -139,8 +150,15 @@ class DepotRegions(private val context: Context) {
                 return@withContext "Itinéraire importé pour $nom"
             }
 
+            TarifsPeages.lireRegion(temporaire)?.takeIf { idValide(it) }?.let { id ->
+                remplacer(temporaire, File(dossier, id + TypeFichier.PEAGES.suffixe))
+                majMeta(id, peagesDonnees = TarifsPeages.lire(File(dossier, id + TypeFichier.PEAGES.suffixe))?.dateTarifs)
+                val nom = lireMeta(id)?.optString("nom")?.ifBlank { null } ?: id
+                return@withContext "Péages importés pour $nom"
+            }
+
             val meta = IndexRecherche.lireMeta(temporaire)
-                ?: throw IOException("Ce fichier n'est ni une carte PMTiles, ni un index de recherche, ni des tuiles d'itinéraire Sente.")
+                ?: throw IOException("Ce fichier n'est ni une carte PMTiles, ni un index de recherche, ni des tuiles d'itinéraire, ni des péages Sente.")
             val id = meta["region"]?.takeIf { idValide(it) }
                 ?: throw IOException("Index de recherche sans région valide.")
             remplacer(temporaire, File(dossier, id + TypeFichier.RECHERCHE.suffixe))

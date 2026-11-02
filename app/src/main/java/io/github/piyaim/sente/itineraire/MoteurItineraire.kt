@@ -17,7 +17,12 @@ import java.io.IOException
 import java.io.RandomAccessFile
 
 /** Préférences de trajet choisies dans l'aperçu (maquette « 6 · Aperçu du trajet »). */
-data class OptionsTrajet(val eviterPeages: Boolean = false, val eviterAutoroutes: Boolean = false)
+data class OptionsTrajet(
+    val eviterPeages: Boolean = false,
+    val eviterAutoroutes: Boolean = false,
+    /** Points à contourner (sections de péage écartées d'un appui dans le détail des péages). */
+    val exclusions: List<Reference> = emptyList(),
+)
 
 /**
  * Un trajet proposé : la route au format de Ferrostar (pour le guidage), plus ce que l'aperçu affiche.
@@ -32,6 +37,8 @@ data class Proposition(
     val autoroute: Boolean,
     val resume: String,
     val sansPeage: Boolean = false,
+    /** Cabines de péage traversées, dans l'ordre ; null si Valhalla n'a pas pu les retrouver. */
+    val passages: List<PassagePeage>? = emptyList(),
 )
 
 /**
@@ -79,7 +86,8 @@ class MoteurItineraire(private val context: Context) {
     }
 
     private fun calculer(tuiles: File, depart: Reference, arrivee: Reference, options: OptionsTrajet): Proposition {
-        val reponse = JSONObject(ouvrir(tuiles).routeRaw(requete(depart, arrivee, options)))
+        val valhalla = ouvrir(tuiles)
+        val reponse = JSONObject(valhalla.routeRaw(requete(depart, arrivee, options)))
         val trajet = reponse.getJSONArray("routes").getJSONObject(0)
         val route = createRouteFromOsrm(
             trajet.toString().toByteArray(),
@@ -109,7 +117,42 @@ class MoteurItineraire(private val context: Context) {
             peages = "toll" in classes,
             autoroute = "motorway" in classes,
             resume = resumes.joinToString(", "),
+            passages = if ("toll" in classes) runCatching { passages(valhalla, trajet.getString("geometry")) }.getOrNull() else emptyList(),
         )
+    }
+
+    /**
+     * Cabines de péage réellement traversées : Valhalla parcourt le tracé (« trace_attributes ») et
+     * signale les nœuds de type cabine. Plus fiable que chercher les gares près du tracé, qui
+     * compterait aussi les bretelles voisines.
+     */
+    private fun passages(valhalla: Valhalla, geometrie: String): List<PassagePeage> {
+        val requete = JSONObject()
+            .put("encoded_polyline", geometrie)
+            .put("shape_match", "edge_walk")
+            .put("costing", "auto")
+            .put(
+                "filters",
+                JSONObject()
+                    .put("action", "include")
+                    .put("attributes", JSONArray(listOf("edge.end_shape_index", "edge.length", "edge.names", "node.type", "shape"))),
+            )
+        val reponse = JSONObject(valhalla.traceAttributesRaw(requete.toString()))
+        val forme = decoderPolyligne6(reponse.getString("shape"))
+        val aretes = reponse.getJSONArray("edges")
+        val resultat = mutableListOf<PassagePeage>()
+        var metres = 0.0
+        for (i in 0 until aretes.length()) {
+            val arete = aretes.getJSONObject(i)
+            metres += arete.optDouble("length", 0.0) * 1000 // kilomètres
+            val type = arete.optJSONObject("end_node")?.optString("type")
+            if (type != "toll_booth" && type != "toll_gantry") continue
+            val point = forme.getOrNull(arete.optInt("end_shape_index", -1)) ?: continue
+            val noms = arete.optJSONArray("names")
+            val route = (0 until (noms?.length() ?: 0)).map { noms!!.getString(it) }.firstOrNull { AUTOROUTE.matches(it) }
+            resultat += PassagePeage(point.lat, point.lon, metres, route?.replace(" ", ""))
+        }
+        return resultat
     }
 
     /** Le moteur est long à préparer : on le garde tant que le fichier de tuiles ne change pas. */
@@ -155,6 +198,12 @@ class MoteurItineraire(private val context: Context) {
                 .put(JSONObject().put("lat", arrivee.lat).put("lon", arrivee.lon).put("type", "break")),
         )
         .put("costing", "auto")
+        .apply {
+            if (options.exclusions.isNotEmpty()) {
+                // Rayon de 150 m : une gare a plusieurs voies parallèles, toutes doivent être écartées.
+                put("exclude_locations", JSONArray(options.exclusions.map { JSONObject().put("lat", it.lat).put("lon", it.lon).put("radius", 150) }))
+            }
+        }
         .put(
             "costing_options",
             JSONObject().put(
@@ -173,6 +222,7 @@ class MoteurItineraire(private val context: Context) {
 
     companion object {
         private const val CONFIG_PAR_DEFAUT = "/com/valhalla/valhalla/default.json"
+        private val AUTOROUTE = Regex("^A ?\\d+[A-Z]?$")
 
         /** Une archive tar (les tuiles de routage) : en-tête « ustar » à l'octet 257. */
         fun estTuilesValhalla(fichier: File): Boolean = try {
@@ -205,3 +255,27 @@ class MoteurItineraire(private val context: Context) {
 
 /** Point d'arrivée d'un lieu, pour le calcul. */
 fun Lieu.reference(): Reference = Reference(lat, lon)
+
+/** Décode une polyligne encodée avec 6 décimales (format des tracés Valhalla). */
+fun decoderPolyligne6(code: String): List<Reference> {
+    val points = ArrayList<Reference>()
+    var i = 0
+    var lat = 0L
+    var lon = 0L
+    while (i < code.length) {
+        for (axe in 0..1) {
+            var resultat = 0L
+            var decalage = 0
+            var b: Int
+            do {
+                b = code[i++].code - 63
+                resultat = resultat or ((b and 0x1f).toLong() shl decalage)
+                decalage += 5
+            } while (b >= 0x20)
+            val delta = if ((resultat and 1L) != 0L) (resultat shr 1).inv() else resultat shr 1
+            if (axe == 0) lat += delta else lon += delta
+        }
+        points += Reference(lat / 1e6, lon / 1e6)
+    }
+    return points
+}

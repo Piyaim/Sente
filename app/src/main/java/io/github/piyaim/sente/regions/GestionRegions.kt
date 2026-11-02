@@ -89,6 +89,10 @@ class GestionRegions(context: Context, private val portee: CoroutineScope) {
         if (routage != null && (installee?.routage == null || plusRecent(routage.donnees, installee.routageDonnees))) {
             taches += Tache(region.id, region.nom, TypeFichier.ROUTAGE, routage)
         }
+        val peages = region.peages
+        if (peages != null && (installee?.peages == null || plusRecent(peages.donnees, installee.peagesDonnees))) {
+            taches += Tache(region.id, region.nom, TypeFichier.PEAGES, peages)
+        }
         return taches
     }
 

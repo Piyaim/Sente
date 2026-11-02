@@ -90,6 +90,7 @@ private const val SOURCE_SELECTION = "sente-selection"
 private const val SOURCE_CATEGORIE = "sente-categorie"
 private const val SOURCE_TRAJET = "sente-trajet"
 private const val SOURCE_VARIANTE = "sente-variante"
+private const val SOURCE_PEAGES = "sente-peages"
 private val MARGE_BAS_CATEGORIE = 300.dp // bande du bas et bouton de position
 private val MARGE_HAUT_CATEGORIE = 190.dp // barre de catégorie et bouton « Liste »
 
@@ -99,6 +100,8 @@ data class AffichageTrajet(
     val variante: List<Reference>?,
     val arrivee: Lieu,
     val guidage: Boolean,
+    /** Gares de péage traversées (repères jaunes de l'aperçu). */
+    val peages: List<Reference> = emptyList(),
 )
 
 @Composable
@@ -256,11 +259,12 @@ fun CarteEcran(
     val trace = trajet?.trace
     val variante = trajet?.variante
     val guidage = trajet?.guidage == true
-    LaunchedEffect(style, selection, categorie, trace, variante, trajet?.arrivee) {
+    LaunchedEffect(style, selection, categorie, trace, variante, trajet?.arrivee, trajet?.peages) {
         val s = style ?: return@LaunchedEffect
         // Ordre d'empilement : variante grise, tracé, puis points de catégorie, puis repère doré au-dessus.
         majLigne(s, SOURCE_VARIANTE, variante, couleurVariante)
         majLigne(s, SOURCE_TRAJET, trace, couleurTrajet)
+        majPeages(s, trajet?.peages.orEmpty())
         majPointsCategorie(s, if (trajet == null) categorie?.lieux.orEmpty() else emptyList(), couleurPoints)
         majRepere(s, selection ?: trajet?.arrivee ?: categorie?.choisi)
     }
@@ -503,7 +507,8 @@ fun CarteEcran(
                         "Adresses : Base Adresse Nationale, Licence Ouverte 2.0.\n\n" +
                         "Tuiles et style : Protomaps (style CC0, adapté). Icônes de carte : tangrams/icons (MIT). " +
                         "Polices : Noto Sans, Atkinson Hyperlegible Next, Bricolage Grotesque (SIL Open Font License).\n\n" +
-                        "Affichage : MapLibre Native (BSD).",
+                        "Affichage : MapLibre Native (BSD). Itinéraire : Valhalla (MIT). Guidage : Ferrostar (BSD).\n\n" +
+                        "Péages : OpenTollData (ODbL), tarifs indicatifs.",
                 )
             },
         )
@@ -625,6 +630,33 @@ private fun majLigne(style: Style, id: String, points: List<Reference>?, couleur
         style.addLayer(bord)
         style.addLayer(trait)
     }
+}
+
+/** Gares de péage traversées : petits repères jaunes cerclés d'encre, sous le repère doré. */
+private fun majPeages(style: Style, gares: List<Reference>) {
+    val points = JSONArray()
+    gares.forEach { g ->
+        points.put(
+            JSONObject()
+                .put("type", "Feature")
+                .put("properties", JSONObject())
+                .put("geometry", JSONObject().put("type", "Point").put("coordinates", JSONArray().put(g.lon).put(g.lat))),
+        )
+    }
+    val geojson = JSONObject().put("type", "FeatureCollection").put("features", points).toString()
+    val source = style.getSourceAs<GeoJsonSource>(SOURCE_PEAGES)
+    if (source != null) {
+        source.setGeoJson(geojson)
+        return
+    }
+    style.addSource(GeoJsonSource(SOURCE_PEAGES, geojson))
+    val repere = CircleLayer("$SOURCE_PEAGES-point", SOURCE_PEAGES).withProperties(
+        PropertyFactory.circleRadius(7f),
+        PropertyFactory.circleColor("#E9C46A"),
+        PropertyFactory.circleStrokeColor("#16211B"),
+        PropertyFactory.circleStrokeWidth(2f),
+    )
+    if (style.getLayer("$SOURCE_SELECTION-halo") != null) style.addLayerBelow(repere, "$SOURCE_SELECTION-halo") else style.addLayer(repere)
 }
 
 /** Points verts des résultats d'une catégorie, sous le repère doré. Le numéro « i » sert au toucher. */
