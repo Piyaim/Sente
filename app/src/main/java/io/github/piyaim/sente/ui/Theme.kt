@@ -132,6 +132,7 @@ fun SenteTheme(sombre: Boolean = isSystemInDarkTheme(), content: @Composable () 
 /** « 1 234 567 890 » octets → « 1,1 Go », « 512 Mo ». */
 fun tailleLisible(octets: Long): String {
     val mo = octets / 1_048_576.0
+    if (mo < 1) return "${maxOf(1L, (octets + 1023) / 1024)} Ko"
     return if (mo >= 1024) "%.1f Go".format(Locale.FRANCE, mo / 1024) else "%.0f Mo".format(Locale.FRANCE, mo)
 }
 

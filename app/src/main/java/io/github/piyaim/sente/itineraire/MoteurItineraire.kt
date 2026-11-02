@@ -39,6 +39,8 @@ data class Proposition(
     val sansPeage: Boolean = false,
     /** Cabines de péage traversées, dans l'ordre ; null si Valhalla n'a pas pu les retrouver. */
     val passages: List<PassagePeage>? = emptyList(),
+    /** Fin de la dernière portion payante du trajet (pour estimer une sortie non vue). */
+    val finPayante: PassagePeage? = null,
 )
 
 /**
@@ -109,6 +111,7 @@ class MoteurItineraire(private val context: Context) {
                 }
             }
         }
+        val traversee = if ("toll" in classes) runCatching { passages(valhalla, trajet.getString("geometry")) }.getOrNull() else null
         return Proposition(
             route = route,
             points = route.geometry.map { Reference(it.lat, it.lng) },
@@ -117,7 +120,8 @@ class MoteurItineraire(private val context: Context) {
             peages = "toll" in classes,
             autoroute = "motorway" in classes,
             resume = resumes.joinToString(", "),
-            passages = if ("toll" in classes) runCatching { passages(valhalla, trajet.getString("geometry")) }.getOrNull() else emptyList(),
+            passages = if ("toll" in classes) traversee?.first else emptyList(),
+            finPayante = traversee?.second,
         )
     }
 
@@ -126,7 +130,7 @@ class MoteurItineraire(private val context: Context) {
      * signale les nœuds de type cabine. Plus fiable que chercher les gares près du tracé, qui
      * compterait aussi les bretelles voisines.
      */
-    private fun passages(valhalla: Valhalla, geometrie: String): List<PassagePeage> {
+    private fun passages(valhalla: Valhalla, geometrie: String): Pair<List<PassagePeage>, PassagePeage?> {
         val requete = JSONObject()
             .put("encoded_polyline", geometrie)
             .put("shape_match", "edge_walk")
@@ -135,24 +139,30 @@ class MoteurItineraire(private val context: Context) {
                 "filters",
                 JSONObject()
                     .put("action", "include")
-                    .put("attributes", JSONArray(listOf("edge.end_shape_index", "edge.length", "edge.names", "node.type", "shape"))),
+                    .put(
+                        "attributes",
+                        JSONArray(listOf("edge.end_shape_index", "edge.length", "edge.names", "edge.toll", "edge.road_class", "node.type", "shape")),
+                    ),
             )
         val reponse = JSONObject(valhalla.traceAttributesRaw(requete.toString()))
         val forme = decoderPolyligne6(reponse.getString("shape"))
         val aretes = reponse.getJSONArray("edges")
         val resultat = mutableListOf<PassagePeage>()
+        var finPayante: PassagePeage? = null
         var metres = 0.0
         for (i in 0 until aretes.length()) {
             val arete = aretes.getJSONObject(i)
             metres += arete.optDouble("length", 0.0) * 1000 // kilomètres
+            val point = forme.getOrNull(arete.optInt("end_shape_index", -1)) ?: continue
+            val noms = arete.optJSONArray("names")?.let { n -> (0 until n.length()).map { n.getString(it) } }.orEmpty()
+            val route = noms.firstOrNull { AUTOROUTE.matches(it) }?.replace(" ", "")
+            if (arete.optBoolean("toll")) finPayante = PassagePeage(point.lat, point.lon, metres, route)
             val type = arete.optJSONObject("end_node")?.optString("type")
             if (type != "toll_booth" && type != "toll_gantry") continue
-            val point = forme.getOrNull(arete.optInt("end_shape_index", -1)) ?: continue
-            val noms = arete.optJSONArray("names")
-            val route = (0 until (noms?.length() ?: 0)).map { noms!!.getString(it) }.firstOrNull { AUTOROUTE.matches(it) }
-            resultat += PassagePeage(point.lat, point.lon, metres, route?.replace(" ", ""))
+            val voieRapide = arete.optString("road_class") in VOIES_RAPIDES
+            resultat += PassagePeage(point.lat, point.lon, metres, route, noms.firstOrNull(), voieRapide)
         }
-        return resultat
+        return resultat to finPayante
     }
 
     /** Le moteur est long à préparer : on le garde tant que le fichier de tuiles ne change pas. */
@@ -223,6 +233,7 @@ class MoteurItineraire(private val context: Context) {
     companion object {
         private const val CONFIG_PAR_DEFAUT = "/com/valhalla/valhalla/default.json"
         private val AUTOROUTE = Regex("^A ?\\d+[A-Z]?$")
+        private val VOIES_RAPIDES = setOf("motorway", "trunk")
 
         /** Une archive tar (les tuiles de routage) : en-tête « ustar » à l'octet 257. */
         fun estTuilesValhalla(fichier: File): Boolean = try {

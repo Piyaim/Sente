@@ -90,7 +90,7 @@ fun ApercuTrajet(
     fun cout(p: Proposition): CoutPeages? = when {
         !p.peages -> CoutPeages(emptyList(), 0, complet = true)
         tarifs == null || p.passages == null -> null
-        else -> tarifs.cout(p.passages, classe)
+        else -> tarifs.cout(p.passages, classe, p.finPayante)
     }
 
     Box(modifier.fillMaxSize()) {
@@ -274,8 +274,8 @@ private fun CarteProposition(
                 if (p.peages) {
                     val texte = when {
                         cout == null -> "Péages"
-                        cout.complet -> "Péages ≈ ${prixLisible(cout.totalCentimes)}"
-                        else -> "Péages ≥ ${prixLisible(cout.totalCentimes)}"
+                        cout.totalCentimes == 0 && !cout.complet -> "Péages · prix inconnu"
+                        else -> "Péages ${cout.prixAffiche}"
                     }
                     Etiquette(texte, FOND_PEAGE, ENCRE_PEAGE, onClick = onPeages)
                 }

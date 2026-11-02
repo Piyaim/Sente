@@ -2,6 +2,17 @@
 
 Toutes les modifications notables de Sente sont consignées ici. Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; numérotation [SemVer](https://semver.org/lang/fr/).
 
+## [0.4.1-pre1] - 2026-11-02
+
+### Corrigé
+
+- Péages à « 0 € » sur certains trajets :
+  - une gare connue sous deux noms (par exemple La Boisse) retrouve son tarif ;
+  - quand la base n'a pas le tarif d'une section, Sente l'estime à partir de la sortie connue la plus proche, ramenée à la distance, et l'affiche « estimé » ;
+  - un péage absent de la base sur une voie rapide (périphérique Nord de Lyon, par exemple) apparaît dans le détail comme « péage non répertorié », avec « Éviter cette section » ;
+  - « Péages · prix inconnu » remplace « ≥ 0,00 € ».
+- Les petits fichiers s'affichent en Ko et non plus « 0 Mo ».
+
 ## [0.4.0-pre1] - 2026-11-02
 
 ### Ajouté

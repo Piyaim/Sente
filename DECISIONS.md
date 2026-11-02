@@ -4,6 +4,8 @@ Chaque décision importante, avec sa date et sa raison. Les plus récentes en ha
 
 | Date | Décision | Raison |
 | --- | --- | --- |
+| 2026-11-02 | Tarif manquant : d'abord une gare voisine de même société (moins de 3 km), sinon estimation depuis la sortie connue la plus proche, ramenée à la distance à vol d'oiseau, affichée « estimé » (choix A) | Écart médian de 4 % mesuré sur 7 900 sections ; un simple tarif au kilomètre se trompait d'environ 35 %, car certaines barrières facturent plus que la distance roulée |
+| 2026-11-02 | Pas de fichier de tarifs tenu à la main pour les péages absents d'OpenTollData : ils sont signalés « péage non répertorié », prix inconnu | Rien à mettre à jour chaque année ; le total s'affiche alors « au moins » |
 | 2026-11-02 | Tarifs des péages tirés d'OpenTollData (données ODbL), version figée par commit, en fichier `.peages.json` par région (choix A) | Seule base libre des tarifs entrée → sortie français ; calcul entièrement hors ligne, sans service tiers |
 | 2026-11-02 | Gares traversées repérées par Valhalla (« trace_attributes », nœuds cabine), puis reliées à la gare OpenTollData la plus proche (moins de 400 m) | Chercher les gares près du tracé comptait aussi les bretelles voisines ; une cabine non reconnue rend le total « au moins » |
 | 2026-11-02 | « Éviter cette section » exclut la gare d'entrée dans un rayon de 150 m | Sans rayon, Valhalla n'excluait que l'arête la plus proche et repassait par la gare |

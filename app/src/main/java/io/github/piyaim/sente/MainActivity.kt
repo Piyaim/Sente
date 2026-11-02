@@ -279,7 +279,7 @@ private fun AppSente(enPetiteFenetre: Boolean, onGuidageActif: (Boolean) -> Unit
             variante = a.propositions?.filterIndexed { i, _ -> i != a.choisie }?.firstOrNull()?.points,
             arrivee = a.destination,
             guidage = false,
-            peages = a.proposition?.passages?.let { passages -> tarifsPeages?.cout(passages, classePeage)?.gares }.orEmpty(),
+            peages = a.proposition?.let { p -> p.passages?.let { tarifsPeages?.cout(it, classePeage, p.finPayante)?.gares } }.orEmpty(),
         )
         else -> null
     }

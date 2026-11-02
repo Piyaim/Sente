@@ -5,6 +5,7 @@ import io.github.piyaim.sente.recherche.distanceMetres
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Classe de péage française retenue pour les prix (indice dans les tarifs : 0 = classe 1, 4 = classe 5). */
 enum class ClassePeage(val indice: Int, val libelle: String) {
@@ -12,8 +13,18 @@ enum class ClassePeage(val indice: Int, val libelle: String) {
     MOTO(4, "Moto"),
 }
 
-/** Une cabine de péage réellement traversée par le trajet (trouvée par Valhalla). */
-data class PassagePeage(val lat: Double, val lon: Double, val metres: Double, val route: String?)
+/**
+ * Une cabine de péage réellement traversée par le trajet (trouvée par Valhalla), ou la fin de la
+ * dernière portion payante. [voieRapide] : autoroute ou voie rapide (pas une barrière de parking).
+ */
+data class PassagePeage(
+    val lat: Double,
+    val lon: Double,
+    val metres: Double,
+    val route: String?,
+    val nom: String? = null,
+    val voieRapide: Boolean = false,
+)
 
 /** Une section payante : entre une entrée et une sortie (réseau fermé), ou une barrière (réseau ouvert). */
 data class SectionPeage(
@@ -28,6 +39,10 @@ data class SectionPeage(
     val evitement: Reference,
     /** Barrière d'un réseau ouvert (prix fixe), plutôt qu'une entrée et une sortie. */
     val ouverte: Boolean = false,
+    /** Prix déduit de la sortie connue la plus proche, faute de tarif exact. */
+    val estime: Boolean = false,
+    /** Péage absent de la base de tarifs (périphérique, tunnel…) : prix inconnu. */
+    val horsBase: Boolean = false,
 )
 
 /** Péages d'un trajet : sections, total connu, et si des cabines n'ont pas pu être reliées à la base. */
@@ -39,6 +54,16 @@ data class CoutPeages(
     val gares: List<Reference> = emptyList(),
 ) {
     val gratuit: Boolean get() = sections.isEmpty() && complet
+    val estime: Boolean get() = sections.any { it.estime }
+
+    /** « ≈ 13,60 € », « ≈ 9,00 € (estimé) », « ≥ 13,60 € » ou « prix inconnu ». */
+    val prixAffiche: String
+        get() = when {
+            totalCentimes == 0 && !complet -> "prix inconnu"
+            !complet -> "≥ " + prixLisible(totalCentimes)
+            estime -> "≈ " + prixLisible(totalCentimes) + " (estimé)"
+            else -> "≈ " + prixLisible(totalCentimes)
+        }
 }
 
 /**
@@ -53,30 +78,41 @@ class TarifsPeages private constructor(
     private val sections: Map<Long, IntArray>,
     private val ouvertes: Map<Int, IntArray>,
 ) {
+    /** Pour chaque gare, les gares reliées par un tarif connu (dans un sens ou l'autre). */
+    private val reliees: Map<Int, IntArray> = sections.keys
+        .groupBy({ (it / 1_000_000L).toInt() }, { (it % 1_000_000L).toInt() })
+        .mapValues { (_, v) -> v.toIntArray() }
+
     private class Gare(val nom: String, val lat: Double, val lon: Double, val ouverte: Boolean, val operateur: String)
 
-    /** Relie les cabines traversées aux gares de la base, puis calcule chaque section pour la classe voulue. */
-    fun cout(passages: List<PassagePeage>, classe: ClassePeage): CoutPeages {
+    /**
+     * Relie les cabines traversées aux gares de la base, puis calcule chaque section pour la classe voulue.
+     * [finPayante] : fin de la dernière portion payante, pour une entrée dont la sortie n'a pas été vue.
+     */
+    fun cout(passages: List<PassagePeage>, classe: ClassePeage, finPayante: PassagePeage? = null): CoutPeages {
         var complet = true
-        // Cabine → gare la plus proche (moins de 400 m) ; plusieurs cabines d'une même gare comptent une fois.
-        val traversees = mutableListOf<Triple<Int, PassagePeage, Double>>()
+        val resultat = mutableListOf<SectionPeage>()
+        val reperes = mutableListOf<Reference>()
+        var entree: Pair<Int, PassagePeage>? = null
+        var derniere = -1
         for (passage in passages) {
-            val (indice, distance) = gares.withIndex()
-                .map { (i, g) -> i to distanceMetres(passage.lat, passage.lon, g.lat, g.lon) }
-                .minByOrNull { it.second } ?: (-1 to Double.MAX_VALUE)
+            // Cabine → gare la plus proche (moins de 400 m) ; plusieurs cabines d'une même gare comptent une fois.
+            val (indice, distance) = plusProche(passage.lat, passage.lon)
             if (indice < 0 || distance > DISTANCE_MAX_M) {
-                // Cabine inconnue sur une autoroute : le total est peut-être incomplet. Ailleurs
-                // (barrière de parking, par exemple), on l'ignore.
-                if (passage.route != null) complet = false
+                // Péage absent de la base sur une voie rapide (périphérique, tunnel…) : signalé, prix inconnu.
+                // Ailleurs (barrière de parking, par exemple), on l'ignore.
+                if (passage.voieRapide) {
+                    complet = false
+                    val ici = Reference(passage.lat, passage.lon)
+                    reperes += ici
+                    resultat += SectionPeage(passage.nom ?: passage.route ?: "Péage", null, passage.route, "", null, null, ici, ouverte = true, horsBase = true)
+                }
                 continue
             }
-            if (traversees.lastOrNull()?.first != indice) traversees += Triple(indice, passage, distance)
-        }
-
-        val resultat = mutableListOf<SectionPeage>()
-        var entree: Pair<Int, PassagePeage>? = null
-        for ((indice, passage) in traversees) {
+            if (indice == derniere) continue
+            derniere = indice
             val gare = gares[indice]
+            reperes += Reference(gare.lat, gare.lon)
             if (gare.ouverte) {
                 val prix = ouvertes[indice]?.get(classe.indice)
                 if (prix == null) complet = false
@@ -86,40 +122,95 @@ class TarifsPeages private constructor(
             val debut = entree
             if (debut == null) {
                 entree = indice to passage
-            } else {
-                val (iEntree, pEntree) = debut
-                val prix = sections[cle(iEntree, indice)]?.get(classe.indice)
-                if (prix == null) complet = false
-                val g = gares[iEntree]
-                resultat += SectionPeage(
-                    entree = joli(g.nom),
-                    sortie = joli(gare.nom),
-                    route = pEntree.route ?: passage.route,
-                    operateur = g.operateur,
-                    metres = passage.metres - pEntree.metres,
-                    centimes = prix,
-                    evitement = Reference(g.lat, g.lon),
-                )
-                entree = null
+                continue
+            }
+            entree = null
+            val (iEntree, pEntree) = debut
+            val prix = prixExact(iEntree, indice, classe)
+            val estimation = if (prix == null) estimer(iEntree, gare.lat, gare.lon, classe) else null
+            if (prix == null && estimation == null) complet = false
+            val g = gares[iEntree]
+            resultat += SectionPeage(
+                entree = joli(g.nom),
+                sortie = joli(gare.nom),
+                route = pEntree.route ?: passage.route,
+                operateur = g.operateur,
+                metres = passage.metres - pEntree.metres,
+                centimes = prix ?: estimation,
+                evitement = Reference(g.lat, g.lon),
+                estime = estimation != null,
+            )
+        }
+        // Entrée sans sortie retrouvée : prix estimé jusqu'à la fin de la portion payante, sinon inconnu.
+        entree?.let { (i, p) ->
+            val g = gares[i]
+            val fin = finPayante?.takeIf { it.metres > p.metres + 1000 }
+            val estimation = fin?.let { estimer(i, it.lat, it.lon, classe) }
+            if (estimation == null) complet = false
+            resultat += SectionPeage(
+                joli(g.nom), null, p.route, g.operateur, fin?.let { it.metres - p.metres }, estimation,
+                Reference(g.lat, g.lon), estime = estimation != null,
+            )
+        }
+        return CoutPeages(resultat, resultat.sumOf { it.centimes ?: 0 }, complet, reperes)
+    }
+
+    private fun plusProche(lat: Double, lon: Double): Pair<Int, Double> =
+        gares.withIndex()
+            .map { (i, g) -> i to distanceMetres(lat, lon, g.lat, g.lon) }
+            .minByOrNull { it.second } ?: (-1 to Double.MAX_VALUE)
+
+    /** Gares de même société et de même type à moins de 3 km : souvent la même gare sous deux noms. */
+    private fun voisines(i: Int): List<Int> {
+        val g = gares[i]
+        return gares.indices.filter { j ->
+            val h = gares[j]
+            j != i && h.operateur == g.operateur && h.ouverte == g.ouverte &&
+                distanceMetres(g.lat, g.lon, h.lat, h.lon) <= DISTANCE_VOISINE_M
+        }
+    }
+
+    /** Tarif de la base pour cette paire de gares, ou pour une paire de gares voisines. */
+    private fun prixExact(entree: Int, sortie: Int, classe: ClassePeage): Int? {
+        val entrees = listOf(entree) + voisines(entree)
+        val sorties = listOf(sortie) + voisines(sortie)
+        for (e in entrees) for (s in sorties) {
+            sections[cle(e, s)]?.getOrNull(classe.indice)?.takeIf { it > 0 }?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * Prix estimé de l'entrée [entree] jusqu'au point visé : tarif de la sortie connue la plus proche
+     * de ce point, ramené à la distance (à vol d'oiseau) depuis l'entrée. Écart médian mesuré : 4 %.
+     */
+    private fun estimer(entree: Int, lat: Double, lon: Double, classe: ClassePeage): Int? {
+        val e = gares[entree]
+        val km = distanceMetres(e.lat, e.lon, lat, lon) / 1000
+        if (km < 1) return null
+        var meilleure = -1
+        var ecart = Double.MAX_VALUE
+        for (s in reliees[entree] ?: return null) {
+            val prix = sections[cle(entree, s)]?.getOrNull(classe.indice) ?: continue
+            if (prix <= 0 || distanceMetres(e.lat, e.lon, gares[s].lat, gares[s].lon) < 3000) continue
+            val d = distanceMetres(lat, lon, gares[s].lat, gares[s].lon)
+            if (d < ecart) {
+                ecart = d
+                meilleure = s
             }
         }
-        // Entrée sans sortie retrouvée : section signalée, prix inconnu.
-        entree?.let { (i, p) ->
-            complet = false
-            val g = gares[i]
-            resultat += SectionPeage(joli(g.nom), null, p.route, g.operateur, null, null, Reference(g.lat, g.lon))
-        }
-        return CoutPeages(
-            resultat,
-            resultat.sumOf { it.centimes ?: 0 },
-            complet,
-            traversees.map { (i, _) -> Reference(gares[i].lat, gares[i].lon) },
-        )
+        if (meilleure < 0 || ecart > ECART_MAX_M) return null
+        val reference = gares[meilleure]
+        val kmReference = distanceMetres(e.lat, e.lon, reference.lat, reference.lon) / 1000
+        val prix = sections.getValue(cle(entree, meilleure))[classe.indice]
+        return (prix * km / kmReference / 10).roundToInt() * 10 // arrondi aux 10 centimes
     }
 
     companion object {
         private const val FORMAT = 1
         private const val DISTANCE_MAX_M = 400.0
+        private const val DISTANCE_VOISINE_M = 3000.0
+        private const val ECART_MAX_M = 40_000.0
 
         private fun cle(a: Int, b: Int): Long = a.toLong() * 1_000_000L + b
 

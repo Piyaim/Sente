@@ -91,7 +91,11 @@ fun DetailPeages(
         } else {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    (if (cout.complet) "" else "≥ ") + prixLisible(cout.totalCentimes),
+                    when {
+                        cout.totalCentimes == 0 && !cout.complet -> "Prix inconnu"
+                        cout.complet -> prixLisible(cout.totalCentimes)
+                        else -> "≥ " + prixLisible(cout.totalCentimes)
+                    },
                     style = MaterialTheme.typography.headlineSmall.copy(fontSize = 34.sp, lineHeight = 36.sp),
                 )
                 val n = cout.sections.size
@@ -116,9 +120,16 @@ fun DetailPeages(
                     }
                 }
             }
+            if (cout.estime) {
+                Text(
+                    "« Estimé » : prix déduit de la sortie connue la plus proche, ramené à la distance (écart habituel de quelques %).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (!cout.complet) {
                 Text(
-                    "Certaines gares ne sont pas dans la base de tarifs : le total est peut-être incomplet.",
+                    "Certains péages ne sont pas dans la base de tarifs : le total est peut-être incomplet.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -156,6 +167,7 @@ private fun LigneSection(section: SectionPeage, onEviter: () -> Unit) {
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 val trajet = when {
+                    section.horsBase -> "${section.entree} · péage non répertorié"
                     section.ouverte -> "Barrière de ${section.entree}"
                     section.sortie != null -> "${section.entree} → ${section.sortie}"
                     else -> "${section.entree} → sortie inconnue"
@@ -168,13 +180,14 @@ private fun LigneSection(section: SectionPeage, onEviter: () -> Unit) {
                     listOfNotNull(
                         section.operateur.ifBlank { null },
                         section.metres?.let { "${(it / 1000).roundToInt()} km" },
+                        if (section.estime) "estimé" else null,
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
-                section.centimes?.let { prixLisible(it) } ?: "prix inconnu",
+                section.centimes?.let { (if (section.estime) "≈ " else "") + prixLisible(it) } ?: "prix inconnu",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.End,
             )
